@@ -1,0 +1,6 @@
+[package]
+name = "servo-robot-bridge"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

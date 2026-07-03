@@ -1,0 +1,7 @@
+[package]
+name = "servo-robot-driver"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bitflags = "2.13.0"

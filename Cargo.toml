@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/servo-robot-driver",
+    "crates/servo-robot-bridge",
+    "crates/servo-robot-tui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3"
+
+[workspace.dependencies]
+# 所有 crate 共用的依赖版本在这统一管理
+robot-driver   = { path = "crates/servo-robot-driver" }
+serialport = "4.9.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+anyhow = "1.0.103"
