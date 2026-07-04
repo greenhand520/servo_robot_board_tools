@@ -1,18 +1,37 @@
-pub mod crc;
-pub mod protocaol;
+//! servo-robot-driver - STM32 串口通信驱动
 
+pub mod dispatch;
+pub mod driver;
+pub mod error;
+pub mod reconnect;
+pub mod state;
+pub mod transport;
 
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+#[cfg(feature = "async")]
+pub mod driver_async;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// 重导出协议层
+pub use servo_robot_protocol as protocol;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+// 便捷重导出
+pub use dispatch::callback::DriverCallback;
+pub use dispatch::EventBus;
+pub use driver::Driver;
+pub use error::{DriverError, FrameError};
+pub use reconnect::ReconnectConfig;
+pub use state::{DriverState, StateSnapshot};
+pub use transport::factory::FnTransportFactory;
+pub use transport::serial::SerialTransport;
+pub use transport::{Transport, TransportFactory};
+
+// Mock 传输层（需要启用 mock feature）
+#[cfg(feature = "mock")]
+pub use transport::MockTransport;
+
+// 异步传输层（需要启用 async feature）
+#[cfg(feature = "async")]
+pub use driver_async::AsyncDriver;
+#[cfg(feature = "async")]
+pub use transport::{AsyncTransport, AsyncTransportFactory, FnAsyncTransportFactory, TokioSerialTransport};
+#[cfg(all(feature = "mock", feature = "async"))]
+pub use transport::AsyncMockTransport;

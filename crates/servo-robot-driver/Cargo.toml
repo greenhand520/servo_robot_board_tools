@@ -4,4 +4,21 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+servo-robot-protocol = { path = "../servo-robot-protocol" }
 bitflags = "2.13.0"
+byteorder = "1.5"
+thiserror = "2"
+flume = "0.12.0"
+log = "0.4"
+serialport = { workspace = true }
+
+# mock feature dependencies
+rand = { version = "0.10.2", optional = true }
+
+# async feature dependencies
+tokio = { version = "1", features = ["rt", "sync", "time", "macros"], optional = true }
+
+[features]
+default = []
+mock = ["rand"]
+async = ["tokio"]
