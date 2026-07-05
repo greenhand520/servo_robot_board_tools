@@ -90,7 +90,13 @@ CRC:     CRC-16/CCITT 校验 (从 TYPE 到 PAYLOAD 末尾)
 | SwitchBatExtOut | 0x13 | 电池额外输出开关 |
 | PowerServoCurrentLimit | 0x21 | 舵机电流限制 |
 | PowerServoTempLimit | 0x22 | 舵机温度限制 |
-| ... | ... | ... |
+| Power5vTempLimit | 0x23 | 5V 温度限制 |
+| ChargeMaxCurrent | 0x24 | 充电最大电流 |
+| ChargeTempDerating | 0x25 | 充电降流温度 |
+| ChargeTempLimit | 0x26 | 充电停止温度 |
+| ChargeStopVoltage | 0x27 | 充电停止电压 |
+| ChargeStopSoc | 0x28 | 充电电量限制 |
+| TxLogLevel | 0x29 | STM32 发送日志等级 |
 
 ## 使用示例
 

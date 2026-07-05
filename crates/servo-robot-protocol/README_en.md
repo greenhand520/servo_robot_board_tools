@@ -91,7 +91,13 @@ CRC:     CRC-16/CCITT checksum (from TYPE to end of PAYLOAD)
 | SwitchBatExtOut | 0x13 | Battery extra output switch |
 | PowerServoCurrentLimit | 0x21 | Servo current limit |
 | PowerServoTempLimit | 0x22 | Servo temperature limit |
-| ... | ... | ... |
+| Power5vTempLimit | 0x23 | 5V temperature limit |
+| ChargeMaxCurrent | 0x24 | Charge max current |
+| ChargeTempDerating | 0x25 | Charge temp derating |
+| ChargeTempLimit | 0x26 | Charge temp limit |
+| ChargeStopVoltage | 0x27 | Charge stop voltage |
+| ChargeStopSoc | 0x28 | Charge stop SOC |
+| TxLogLevel | 0x29 | STM32 transmit log level |
 
 ## Usage Examples
 

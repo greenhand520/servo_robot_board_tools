@@ -3,6 +3,7 @@
 use crate::error::FrameError;
 use crate::frame::{FromPayload, ToPayload};
 use alloc::vec::Vec;
+use crate::log::LogLevel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -21,6 +22,8 @@ pub enum ConfigType {
     ChargeTempLimit = 0x26,
     ChargeStopVoltage = 0x27,
     ChargeStopSoc = 0x28,
+    // servo robot board发送的日志等级
+    TxLogLevel = 0x29,
 }
 
 impl ConfigType {
@@ -40,6 +43,7 @@ impl ConfigType {
             0x26 => Some(Self::ChargeTempLimit),
             0x27 => Some(Self::ChargeStopVoltage),
             0x28 => Some(Self::ChargeStopSoc),
+            0x29 => Some(Self::TxLogLevel),
             _ => None,
         }
     }
@@ -61,6 +65,7 @@ impl ConfigType {
             Self::ChargeTempLimit => "Charge Temp Limit",
             Self::ChargeStopVoltage => "Charge Stop Voltage",
             Self::ChargeStopSoc => "Charge Stop Soc",
+            Self::TxLogLevel => "TxLog Level",
         }
     }
 
@@ -99,6 +104,8 @@ pub enum Config {
     ChargeStopVoltage(f32),
     // 充电电量限制，如只充到80%
     ChargeStopSoc(f32),
+    // 发送的日志等级
+    TxLogLevel(LogLevel),
 }
 
 impl Config {
@@ -118,6 +125,7 @@ impl Config {
             Self::ChargeTempLimit(_) => ConfigType::ChargeTempLimit,
             Self::ChargeStopVoltage(_) => ConfigType::ChargeStopVoltage,
             Self::ChargeStopSoc(_) => ConfigType::ChargeStopSoc,
+            Self::TxLogLevel(_) => ConfigType::TxLogLevel,
         }
     }
 
@@ -142,6 +150,7 @@ impl Config {
             | Self::ChargeTempLimit(v)
             | Self::ChargeStopVoltage(v)
             | Self::ChargeStopSoc(v) => *v,
+            Self::TxLogLevel(level) => *level as u8 as f32,
         }
     }
 
@@ -161,6 +170,8 @@ impl Config {
             ConfigType::ChargeTempLimit => Self::ChargeTempLimit(value),
             ConfigType::ChargeStopVoltage => Self::ChargeStopVoltage(value),
             ConfigType::ChargeStopSoc => Self::ChargeStopSoc(value),
+            ConfigType::TxLogLevel => Self::TxLogLevel(LogLevel::from_u8(value as _)),
+
         }
     }
 
@@ -230,6 +241,7 @@ pub struct BoardConfigSnapshot {
     pub power_5v_on: bool,
     pub charge_on: bool,
     pub bat_ext_out_on: bool,
+    pub tx_log_level: LogLevel,
 }
 
 impl Default for BoardConfigSnapshot {
@@ -248,17 +260,18 @@ impl Default for BoardConfigSnapshot {
             charge_enable: true,
             servo_power_on: true,
             power_5v_on: true,
-            charge_on: false,
-            bat_ext_out_on: false,
+            charge_on: true,
+            bat_ext_out_on: true,
+            tx_log_level: LogLevel::Info,
         }
     }
 }
 
 impl BoardConfigSnapshot {
     pub fn from_bytes(data: &[u8]) -> Result<Self, FrameError> {
-        if data.len() < 41 {
+        if data.len() < 42 {
             return Err(FrameError::PayloadTooShort {
-                expected: 41,
+                expected: 42,
                 got: data.len(),
             });
         }
@@ -298,6 +311,8 @@ impl BoardConfigSnapshot {
         let charge_on = data[o] != 0;
         o += 1;
         let bat_ext_out_on = data[o] != 0;
+        o += 1;
+        let tx_log_level = LogLevel::from_u8(data[o]);
         Ok(BoardConfigSnapshot {
             servo_current_limit,
             servo_temp_limit,
@@ -314,11 +329,12 @@ impl BoardConfigSnapshot {
             power_5v_on,
             charge_on,
             bat_ext_out_on,
+            tx_log_level,
         })
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(41);
+        let mut buf = Vec::with_capacity(42);
         buf.extend_from_slice(&self.servo_current_limit.to_le_bytes());
         buf.extend_from_slice(&self.servo_temp_limit.to_le_bytes());
         buf.extend_from_slice(&self.temp_5v_limit.to_le_bytes());
@@ -334,6 +350,7 @@ impl BoardConfigSnapshot {
         buf.push(self.power_5v_on as u8);
         buf.push(self.charge_on as u8);
         buf.push(self.bat_ext_out_on as u8);
+        buf.push(self.tx_log_level as u8);
         buf
     }
 }
