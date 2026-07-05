@@ -7,6 +7,7 @@ use crate::battery_state::BatteryState;
 use crate::config::{BoardConfigSnapshot, Config, ConfigType};
 use crate::event::BoardEvent;
 use crate::imu::ImuData;
+use crate::log::LogMessage;
 use crate::power::PowerData;
 use crate::system::SystemInfo;
 use crate::thermal::ThermalData;
@@ -30,6 +31,7 @@ pub enum FrameType {
     Battery = 0x05,
     System = 0x06,
     Event = 0x07,
+    Log = 0x08,
 
     // ═══ 下行 (PC → STM32) ═══
     CfgWrite = 0x80,
@@ -55,6 +57,7 @@ impl FrameType {
             0x05 => Self::Battery,
             0x06 => Self::System,
             0x07 => Self::Event,
+            0x08 => Self::Log,
             0x80 => Self::CfgWrite,
             0x81 => Self::CfgQuery,
             0x82 => Self::CfgQueryAll,
@@ -74,6 +77,7 @@ impl FrameType {
             Self::Battery => 0x05,
             Self::System => 0x06,
             Self::Event => 0x07,
+            Self::Log => 0x08,
             Self::CfgWrite => 0x80,
             Self::CfgQuery => 0x81,
             Self::CfgQueryAll => 0x82,
@@ -94,6 +98,7 @@ impl FrameType {
                 | Self::Battery
                 | Self::System
                 | Self::Event
+                | Self::Log
         )
     }
 
@@ -117,6 +122,7 @@ impl FrameType {
             Self::Battery => "Battery",
             Self::System => "System",
             Self::Event => "Event",
+            Self::Log => "Log",
             Self::CfgWrite => "CfgWrite",
             Self::CfgQuery => "CfgQuery",
             Self::CfgQueryAll => "CfgQueryAll",
@@ -266,6 +272,7 @@ pub enum TypedFrame {
     Battery(BatteryState),
     System(SystemInfo),
     Event(BoardEvent),
+    Log(LogMessage),
 
     // 应答帧
     AckCfgWrite { success: bool },
@@ -294,6 +301,7 @@ impl TypedFrame {
             )?)),
             FrameType::System => Ok(TypedFrame::System(SystemInfo::from_bytes(&frame.payload)?)),
             FrameType::Event => Ok(TypedFrame::Event(BoardEvent::from_bytes(&frame.payload)?)),
+            FrameType::Log => Ok(TypedFrame::Log(LogMessage::from_bytes(&frame.payload)?)),
             FrameType::AckCfgWrite => {
                 if frame.payload.is_empty() {
                     return Err(FrameError::PayloadTooShort {
@@ -325,6 +333,7 @@ impl TypedFrame {
             TypedFrame::Battery(_) => FrameType::Battery,
             TypedFrame::System(_) => FrameType::System,
             TypedFrame::Event(_) => FrameType::Event,
+            TypedFrame::Log(_) => FrameType::Log,
             TypedFrame::AckCfgWrite { .. } => FrameType::AckCfgWrite,
             TypedFrame::AckCfgQuery(_) => FrameType::AckCfgQuery,
             TypedFrame::AckCfgQueryAll(_) => FrameType::AckCfgQueryAll,
