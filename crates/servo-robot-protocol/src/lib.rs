@@ -16,6 +16,7 @@ pub mod power;
 pub mod battery_state;
 pub mod imu;
 pub mod thermal;
+pub mod log;
 
 /// 通用枚举转换宏
 #[macro_export]

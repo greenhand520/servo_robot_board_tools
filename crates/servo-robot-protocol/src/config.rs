@@ -13,7 +13,6 @@ pub enum ConfigType {
     Switch5VPower = 0x11,
     SwitchCharge = 0x12,
     SwitchBatExtOut = 0x13,
-    SetRGB = 0x14,
     PowerServoCurrentLimit = 0x21,
     PowerServoTempLimit = 0x22,
     Power5vTempLimit = 0x23,
@@ -21,7 +20,7 @@ pub enum ConfigType {
     ChargeTempDerating = 0x25,
     ChargeTempLimit = 0x26,
     ChargeStopVoltage = 0x27,
-    ChargeStopCapacity = 0x28,
+    ChargeStopSoc = 0x28,
 }
 
 impl ConfigType {
@@ -33,7 +32,6 @@ impl ConfigType {
             0x11 => Some(Self::Switch5VPower),
             0x12 => Some(Self::SwitchCharge),
             0x13 => Some(Self::SwitchBatExtOut),
-            0x14 => Some(Self::SetRGB),
             0x21 => Some(Self::PowerServoCurrentLimit),
             0x22 => Some(Self::PowerServoTempLimit),
             0x23 => Some(Self::Power5vTempLimit),
@@ -41,7 +39,7 @@ impl ConfigType {
             0x25 => Some(Self::ChargeTempDerating),
             0x26 => Some(Self::ChargeTempLimit),
             0x27 => Some(Self::ChargeStopVoltage),
-            0x28 => Some(Self::ChargeStopCapacity),
+            0x28 => Some(Self::ChargeStopSoc),
             _ => None,
         }
     }
@@ -55,7 +53,6 @@ impl ConfigType {
             Self::Switch5VPower => "5V Power",
             Self::SwitchCharge => "Charge",
             Self::SwitchBatExtOut => "Battery Extra Output",
-            Self::SetRGB => "RGB LED",
             Self::PowerServoCurrentLimit => "Servo Current Limit",
             Self::PowerServoTempLimit => "Servo Temp Limit",
             Self::Power5vTempLimit => "5V Temp Limit",
@@ -63,7 +60,7 @@ impl ConfigType {
             Self::ChargeTempDerating => "Charge Temp Derating",
             Self::ChargeTempLimit => "Charge Temp Limit",
             Self::ChargeStopVoltage => "Charge Stop Voltage",
-            Self::ChargeStopCapacity => "Charge Stop Capacity",
+            Self::ChargeStopSoc => "Charge Stop Soc",
         }
     }
 
@@ -75,7 +72,7 @@ impl ConfigType {
             | Self::ChargeTempDerating
             | Self::ChargeTempLimit => "°C",
             Self::ChargeStopVoltage => "V",
-            Self::ChargeStopCapacity => "%",
+            Self::ChargeStopSoc => "%",
             _ => "",
         }
     }
@@ -94,10 +91,14 @@ pub enum Config {
     PowerServoTempLimit(f32),
     Power5vTempLimit(f32),
     ChargeMaxCurrent(f32),
+    // 充电开始降流时的充电电路温度
     ChargeTempDerating(f32),
+    // 停止充电时的充电电路温度
     ChargeTempLimit(f32),
+    // 充电停止电压
     ChargeStopVoltage(f32),
-    ChargeStopCapacity(f32),
+    // 充电电量限制，如只充到80%
+    ChargeStopSoc(f32),
 }
 
 impl Config {
@@ -116,7 +117,7 @@ impl Config {
             Self::ChargeTempDerating(_) => ConfigType::ChargeTempDerating,
             Self::ChargeTempLimit(_) => ConfigType::ChargeTempLimit,
             Self::ChargeStopVoltage(_) => ConfigType::ChargeStopVoltage,
-            Self::ChargeStopCapacity(_) => ConfigType::ChargeStopCapacity,
+            Self::ChargeStopSoc(_) => ConfigType::ChargeStopSoc,
         }
     }
 
@@ -140,7 +141,7 @@ impl Config {
             | Self::ChargeTempDerating(v)
             | Self::ChargeTempLimit(v)
             | Self::ChargeStopVoltage(v)
-            | Self::ChargeStopCapacity(v) => *v,
+            | Self::ChargeStopSoc(v) => *v,
         }
     }
 
@@ -159,8 +160,7 @@ impl Config {
             ConfigType::ChargeTempDerating => Self::ChargeTempDerating(value),
             ConfigType::ChargeTempLimit => Self::ChargeTempLimit(value),
             ConfigType::ChargeStopVoltage => Self::ChargeStopVoltage(value),
-            ConfigType::ChargeStopCapacity => Self::ChargeStopCapacity(value),
-            _ => Self::Reset,
+            ConfigType::ChargeStopSoc => Self::ChargeStopSoc(value),
         }
     }
 
