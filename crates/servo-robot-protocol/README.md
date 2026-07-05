@@ -7,7 +7,7 @@ STM32 机器人通信协议定义，支持 `no_std` + `alloc`，可用于 PC 和
 
 - `#![no_std]` 兼容，支持嵌入式环境
 - 帧协议解析（HEAD + TYPE + LEN + PAYLOAD + CRC）
-- 完整的数据类型定义（IMU、电源、温度、电池、系统信息、事件、配置）
+- 完整的数据类型定义（IMU、电源、温度、电池、系统信息、事件、日志、配置）
 - CRC-16/CCITT 校验
 - 通过 `embedded` feature 切换平台支持
 
@@ -55,6 +55,7 @@ CRC:     CRC-16/CCITT 校验 (从 TYPE 到 PAYLOAD 末尾)
 | Battery | 0x05 | 上行 | 电池状态 |
 | System | 0x06 | 上行 | 系统信息 |
 | Event | 0x07 | 上行 | 事件 |
+| Log | 0x08 | 上行 | 日志消息 |
 | CfgWrite | 0x80 | 下行 | 写入配置 |
 | CfgQuery | 0x81 | 下行 | 查询单个配置 |
 | CfgQueryAll | 0x82 | 下行 | 查询所有配置 |
@@ -74,6 +75,7 @@ CRC:     CRC-16/CCITT 校验 (从 TYPE 到 PAYLOAD 末尾)
 | `BatteryState` | voltage, current, soc, percentage, cell_voltages, ... | 10Hz |
 | `SystemInfo` | uptime, cpu_usage, heap, stack, frames_sent, pd_voltage/current | 1Hz |
 | `BoardEvent` | charger_connected, fan_enabled, charge_phase, protection_flags | 触发式 |
+| `LogMessage` | level, file_name, fun_name, msg | 触发式 |
 | `BoardConfigSnapshot` | 所有配置参数 + 开关状态 | 事件触发 |
 
 ### 配置类型
@@ -148,6 +150,7 @@ src/
 ├── battery_state.rs    # BatteryState
 ├── system.rs           # SystemInfo, ResetReason
 ├── event.rs            # BoardEvent, ChargePhase, ProtectionFlags
+├── log.rs              # LogMessage, LogLevel
 └── config.rs           # ConfigType, Config, BoardConfigSnapshot
 ```
 

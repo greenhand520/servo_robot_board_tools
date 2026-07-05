@@ -8,7 +8,7 @@ STM32 Robot Communication Protocol Definition, supports `no_std` + `alloc`, comp
 
 - `#![no_std]` compatible, supports embedded environments
 - Frame protocol parsing (HEAD + TYPE + LEN + PAYLOAD + CRC)
-- Complete data type definitions (IMU, Power, Thermal, Battery, System Info, Event, Config)
+- Complete data type definitions (IMU, Power, Thermal, Battery, System Info, Event, Log, Config)
 - CRC-16/CCITT checksum
 - Platform switching via `embedded` feature
 
@@ -56,6 +56,7 @@ CRC:     CRC-16/CCITT checksum (from TYPE to end of PAYLOAD)
 | Battery | 0x05 | Uplink | Battery status |
 | System | 0x06 | Uplink | System information |
 | Event | 0x07 | Uplink | Event |
+| Log | 0x08 | Uplink | Log message |
 | CfgWrite | 0x80 | Downlink | Write configuration |
 | CfgQuery | 0x81 | Downlink | Query single config |
 | CfgQueryAll | 0x82 | Downlink | Query all configs |
@@ -75,6 +76,7 @@ CRC:     CRC-16/CCITT checksum (from TYPE to end of PAYLOAD)
 | `BatteryState` | voltage, current, soc, percentage, cell_voltages, ... | 10Hz |
 | `SystemInfo` | uptime, cpu_usage, heap, stack, frames_sent, pd_voltage/current | 1Hz |
 | `BoardEvent` | charger_connected, fan_enabled, charge_phase, protection_flags | Triggered |
+| `LogMessage` | level, file_name, fun_name, msg | Triggered |
 | `BoardConfigSnapshot` | All config params + switch states | Event triggered |
 
 ### Configuration Types
@@ -149,6 +151,7 @@ src/
 ├── battery_state.rs    # BatteryState
 ├── system.rs           # SystemInfo, ResetReason
 ├── event.rs            # BoardEvent, ChargePhase, ProtectionFlags
+├── log.rs              # LogMessage, LogLevel
 └── config.rs           # ConfigType, Config, BoardConfigSnapshot
 ```
 
