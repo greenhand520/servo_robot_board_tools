@@ -1,0 +1,8 @@
+# Servo Robot Bridge 参数配置
+# 通过 launch 文件加载: ros2 launch servo_robot-bridge bridge.launch.py
+# 或命令行: ros2 run servo-robot-bridge servo-robot-bridge --ros-args --params-file servo_robot_bridge.yaml
+
+servo_robot_board_bridge:
+  ros__parameters:
+    port: "/dev/ttyUSB0"
+    baud_rate: 115200

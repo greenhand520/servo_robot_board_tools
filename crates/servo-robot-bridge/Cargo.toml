@@ -4,3 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+servo-robot-driver = { path = "../servo-robot-driver" }
+rclrs = "0.7"
+sensor_msgs = { path = "/home/eartholnpc/ros_pkgs/ros2_rust_ws/install/sensor_msgs/share/sensor_msgs/rust" }
+geometry_msgs = { path = "/home/eartholnpc/ros_pkgs/ros2_rust_ws/install/geometry_msgs/share/geometry_msgs/rust" }
+servo_robot_board_interface = { path = "/home/eartholnpc/ros_pkgs/servo_robot_board_ws/install/servo_robot_board_interface/share/servo_robot_board_interface/rust" }
+
+[features]
+mock = ["servo-robot-driver/mock"]
