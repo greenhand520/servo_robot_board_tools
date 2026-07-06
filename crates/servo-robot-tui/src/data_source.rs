@@ -25,7 +25,7 @@ pub struct DataSnapshot {
     pub connected: bool,
     pub frame_count: u64,
     pub frames_parsed: u64,
-    pub frames_dropped: u64,
+    
     pub last_update: Instant,
 }
 
@@ -42,7 +42,6 @@ impl Default for DataSnapshot {
             connected: false,
             frame_count: 0,
             frames_parsed: 0,
-            frames_dropped: 0,
             last_update: Instant::now(),
         }
     }
@@ -52,9 +51,6 @@ impl Default for DataSnapshot {
 pub trait DataSource: Send + 'static {
     /// 获取最新快照
     fn snapshot(&self) -> DataSnapshot;
-
-    /// 发送命令
-    
 
     /// 写入配置
     fn write_config(&self, config: Config) -> Result<(), DriverError>;
@@ -78,10 +74,6 @@ impl DriverSource {
         }
     }
 
-    pub fn start(&self) -> Result<(), DriverError> {
-        let mut driver = self.driver.lock().map_err(|_| DriverError::LockPoisoned)?;
-        driver.start()
-    }
 }
 
 impl DataSource for DriverSource {
@@ -98,7 +90,6 @@ impl DataSource for DriverSource {
             connected: snap.connected,
             frame_count: snap.frame_count,
             frames_parsed: snap.frames_parsed,
-            frames_dropped: snap.frames_dropped,
             last_update: Instant::now(),
         }
     }

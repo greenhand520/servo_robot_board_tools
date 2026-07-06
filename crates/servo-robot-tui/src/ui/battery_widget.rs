@@ -1,4 +1,4 @@
-//! 电池组件（SOC在电池图形中间）
+//! 电池组件（SOC在电池图形中间，3列行布局）
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -7,6 +7,19 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use crate::app::App;
 use crate::ui::colors;
+
+/// 列宽定义
+const COL1_W: usize = 18;
+const COL2_W: usize = 16;
+const COL3_W: usize = 20;
+
+fn cell(text: &str, width: usize, style: Style) -> Span<'static> {
+    Span::styled(format!("{:<width$}", text, width = width), style)
+}
+
+fn spacer() -> Span<'static> {
+    Span::raw("  ")
+}
 
 pub fn render(f: &mut Frame, area: Rect, app: &App) {
     let battery = &app.current_data.battery;
@@ -22,14 +35,14 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         let filled = (soc / 100.0 * bar_width as f32) as usize;
         let empty = bar_width - filled;
 
-        // 第1行：电池顶部
+        // 电池顶部
         text.push(Line::from(vec![
             Span::styled("┌", Style::default().fg(Color::DarkGray)),
             Span::styled("─".repeat(bar_width), Style::default().fg(Color::DarkGray)),
             Span::styled("┐", Style::default().fg(Color::DarkGray)),
         ]));
 
-        // 第2行：电池中间 + SOC + 容量
+        // 电池中间 + SOC + 容量
         text.push(Line::from(vec![
             Span::styled("│", Style::default().fg(Color::DarkGray)),
             Span::styled("█".repeat(filled), Style::default().fg(soc_color)),
@@ -38,72 +51,106 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
             Span::styled("       SOC: ", Style::default().fg(Color::White)),
             Span::styled(format!("{:.1}%", soc), Style::default().fg(soc_color)),
             Span::raw("  "),
-            Span::styled("容量: ", Style::default().fg(Color::White)),
+            Span::styled("Capacity: ", Style::default().fg(Color::White)),
             Span::styled(format!("{:.0}mAh", bat.soc), Style::default().fg(Color::Cyan)),
         ]));
 
-        // 第3行：电池底部
+        // 电池底部
         text.push(Line::from(vec![
             Span::styled("└", Style::default().fg(Color::DarkGray)),
             Span::styled("─".repeat(bar_width), Style::default().fg(Color::DarkGray)),
             Span::styled("┘", Style::default().fg(Color::DarkGray)),
         ]));
 
-        // 3列数据（值左对齐）
-        for i in 0..4 {
-            let cell_v = bat.cell_voltages.get(i).copied().unwrap_or(0.0);
-            let cell_t = bat.cell_temperatures.get(i).copied().unwrap_or(0.0);
-            let v_color = colors::get_cell_voltage_color(cell_v);
-            let t_color = colors::get_temp_color(cell_t, 45.0);
+        // 充电状态颜色
+        let state_str = match bat.charge_status {
+            servo_robot_driver::protocol::battery_state::BatteryChargeStatus::Charging => "Charging",
+            servo_robot_driver::protocol::battery_state::BatteryChargeStatus::Discharging => "Discharging",
+            servo_robot_driver::protocol::battery_state::BatteryChargeStatus::Full => "Full",
+            servo_robot_driver::protocol::battery_state::BatteryChargeStatus::NotCharging => "NotCharging",
+            servo_robot_driver::protocol::battery_state::BatteryChargeStatus::Unknown => "Unknown",
+        };
+        let state_color = match bat.charge_status {
+            servo_robot_driver::protocol::battery_state::BatteryChargeStatus::Charging => Color::Green,
+            servo_robot_driver::protocol::battery_state::BatteryChargeStatus::Full => Color::Cyan,
+            _ => Color::White,
+        };
 
-            // 第2列（值左对齐，宽度10）
-            let col2 = match i {
-                0 => format!("充满: {:<10}", format!("{:.0}mAh", bat.capacity)),
-                1 => format!("设计: {:<10}", format!("{:.0}mAh", bat.design_capacity)),
-                2 => format!("状态: {:<10}", format!("{:?}", bat.charge_status)),
-                3 => format!("健康: {:<10}", format!("{:?}", bat.health)),
-                _ => String::new(),
-            };
+        // 充电器状态
+        let charger_str = match event {
+            Some(evt) if evt.charger_connected => "CONNECTED",
+            Some(_) => "NC",
+            None => "UNKNOW",
+        };
 
-            // 第3列（值左对齐，宽度8）
-            let col3 = match i {
-                0 => format!("类型: {:<8}", format!("{:?}", bat.technology)),
-                1 => format!("SN:   {:<8}", bat.serial_number),
-                2 => format!("在位: {:<8}", if bat.present { "是" } else { "否" }),
-                3 => {
-                    if let Some(evt) = event {
-                        format!("充电: {:<8}", if evt.charger_connected { "已连接" } else { "未连接" })
-                    } else {
-                        format!("充电: {:<8}", "未知")
-                    }
-                }
-                _ => String::new(),
-            };
+        // Row 1: Cell1 | Full容量 | State充电状态
+        let c1v = bat.cell_voltages.get(0).copied().unwrap_or(0.0);
+        let c1t = bat.cell_temperatures.get(0).copied().unwrap_or(0.0);
+        text.push(Line::from(vec![
+            cell(&format!("Cell1: {:.2}V {:.0}°C", c1v, c1t), COL1_W,
+                Style::default().fg(colors::get_cell_voltage_color(c1v))),
+            spacer(),
+            cell(&format!("Full: {:.0}mAh", bat.capacity), COL2_W,
+                Style::default().fg(Color::White)),
+            spacer(),
+            cell(&format!("State: {}", state_str), COL3_W,
+                Style::default().fg(state_color)),
+        ]));
 
-            text.push(Line::from(vec![
-                Span::styled(format!("Cell{}: ", i + 1), Style::default().fg(Color::White)),
-                Span::styled(format!("{:.2}V", cell_v), Style::default().fg(v_color)),
-                Span::raw(" "),
-                Span::styled(format!("{:.0}°C", cell_t), Style::default().fg(t_color)),
-                Span::raw("   "),
-                Span::styled(col2, Style::default().fg(Color::White)),
-                Span::raw(" "),
-                Span::styled(col3, Style::default().fg(Color::White)),
-            ]));
-        }
+        // Row 2: Cell2 | Design设计容量 | Health健康
+        let c2v = bat.cell_voltages.get(1).copied().unwrap_or(0.0);
+        let c2t = bat.cell_temperatures.get(1).copied().unwrap_or(0.0);
+        text.push(Line::from(vec![
+            cell(&format!("Cell2: {:.2}V {:.0}°C", c2v, c2t), COL1_W,
+                Style::default().fg(colors::get_cell_voltage_color(c2v))),
+            spacer(),
+            cell(&format!("Design: {:.0}mAh", bat.design_capacity), COL2_W,
+                Style::default().fg(Color::White)),
+            spacer(),
+            cell(&format!("Health: {:?}", bat.health), COL3_W,
+                Style::default().fg(Color::White)),
+        ]));
+
+        // Row 3: Cell3 | Tech电池类型 | Present
+        let c3v = bat.cell_voltages.get(2).copied().unwrap_or(0.0);
+        let c3t = bat.cell_temperatures.get(2).copied().unwrap_or(0.0);
+        text.push(Line::from(vec![
+            cell(&format!("Cell3: {:.2}V {:.0}°C", c3v, c3t), COL1_W,
+                Style::default().fg(colors::get_cell_voltage_color(c3v))),
+            spacer(),
+            cell(&format!("Tech: {:?}", bat.technology), COL2_W,
+                Style::default().fg(Color::White)),
+            spacer(),
+            cell(&format!("Present: {}", if bat.present { "YES" } else { "NO" }), COL3_W,
+                Style::default().fg(if bat.present { Color::Green } else { Color::Red })),
+        ]));
+
+        // Row 4: Cell4 | SN序列号 | Charger充电器
+        let c4v = bat.cell_voltages.get(3).copied().unwrap_or(0.0);
+        let c4t = bat.cell_temperatures.get(3).copied().unwrap_or(0.0);
+        text.push(Line::from(vec![
+            cell(&format!("Cell4: {:.2}V {:.0}°C", c4v, c4t), COL1_W,
+                Style::default().fg(colors::get_cell_voltage_color(c4v))),
+            spacer(),
+            cell(&format!("SN: {}", bat.serial_number), COL2_W,
+                Style::default().fg(Color::White)),
+            spacer(),
+            cell(&format!("Charger: {}", charger_str), COL3_W,
+                Style::default().fg(if charger_str == "CON" { Color::Green } else { Color::DarkGray })),
+        ]));
     } else {
         text.push(Line::from(vec![
-            Span::styled("🔋 电池", Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD)),
+            Span::styled("🔋 Battery", Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD)),
         ]));
         text.push(Line::from(vec![
-            Span::styled("等待数据...", Style::default().fg(Color::DarkGray)),
+            Span::styled("Waiting data...", Style::default().fg(Color::DarkGray)),
         ]));
     }
 
     let paragraph = Paragraph::new(text)
         .block(
             Block::default()
-                .title("电池状态")
+                .title("🔋Battery State")
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Yellow)),
         );

@@ -86,6 +86,7 @@ impl BatteryChart {
 pub struct ConfigEditor {
     pub active: bool,
     pub selected_index: usize,
+    pub scroll_offset: usize,
     pub editing: bool,
     pub edit_buffer: String,
     pub configs: Vec<(ConfigType, f32)>,
@@ -96,6 +97,7 @@ impl ConfigEditor {
         ConfigEditor {
             active: false,
             selected_index: 0,
+            scroll_offset: 0,
             editing: false,
             edit_buffer: String::new(),
             configs: vec![
@@ -106,7 +108,7 @@ impl ConfigEditor {
                 (ConfigType::ChargeTempDerating, 60.0),
                 (ConfigType::ChargeTempLimit, 70.0),
                 (ConfigType::ChargeStopVoltage, 16.8),
-                (ConfigType::ChargeStopCapacity, 1.0),
+                (ConfigType::ChargeStopSoc, 1.0),
             ],
         }
     }
@@ -155,6 +157,11 @@ pub struct App {
     pub show_config_query: bool,
     pub should_quit: bool,
     pub start_time: Instant,
+    pub log_state: tui_logger::TuiWidgetState,
+    pub log_focus: bool,
+    pub event_log: VecDeque<String>,
+    pub protection_event_count: u64,
+    pub local_tx_log_level: servo_robot_driver::protocol::log::LogLevel,
 }
 
 impl App {
@@ -176,6 +183,11 @@ impl App {
             show_config_query: false,
             should_quit: false,
             start_time: Instant::now(),
+            log_state: tui_logger::TuiWidgetState::new(),
+            log_focus: false,
+            event_log: VecDeque::new(),
+            protection_event_count: 0,
+            local_tx_log_level: servo_robot_driver::protocol::log::LogLevel::Info,
         }
     }
 
@@ -260,6 +272,41 @@ impl App {
             self.config_editor.update_from_config(config);
         }
 
+        // 更新事件日志
+        if let Some(evt) = &snapshot.event {
+            let flags = evt.protection_flags;
+
+            // 统计保护事件数量
+            if !flags.is_empty() {
+                self.protection_event_count += 1;
+
+                // 添加保护事件到日志
+                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::SERVO_OVERCURRENT) {
+                    self.push_event("SERVO_OVERCURRENT".to_string());
+                }
+                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::SERVO_THERMAL) {
+                    self.push_event("SERVO_THERMAL".to_string());
+                }
+                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::DCDC_5V_THERMAL) {
+                    self.push_event("DCDC_5V_THERMAL".to_string());
+                }
+                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::CHARGE_DERATING) {
+                    self.push_event("CHARGE_DERATING".to_string());
+                }
+                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::CHARGE_THERMAL) {
+                    self.push_event("CHARGE_THERMAL".to_string());
+                }
+                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::BATTERY_LOW) {
+                    self.push_event("BATTERY_LOW".to_string());
+                }
+            }
+
+            // 充电状态变化
+            if evt.charger_connected {
+                self.push_event("CHARGER_CONNECTED".to_string());
+            }
+        }
+
         // 自动查询配置
         if snapshot.connected && !self.config_received {
             let now = Instant::now();
@@ -270,6 +317,14 @@ impl App {
         }
 
         self.current_data = snapshot;
+    }
+
+    /// 添加事件到日志队列，保持最大3条（底部区域5行，边框2行，可见3行）
+    fn push_event(&mut self, event: String) {
+        if self.event_log.len() >= 3 {
+            self.event_log.pop_front();
+        }
+        self.event_log.push_back(event);
     }
 
     

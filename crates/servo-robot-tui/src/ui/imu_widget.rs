@@ -12,7 +12,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
 
     let mut text = vec![
         Line::from(vec![
-            Span::styled("📐 IMU", Style::default().fg(Color::Cyan).add_modifier(ratatui::style::Modifier::BOLD)),
+            Span::styled("IMU", Style::default().fg(Color::Cyan).add_modifier(ratatui::style::Modifier::BOLD)),
             Span::styled(" (0x70)", Style::default().fg(Color::DarkGray)),
         ]),
     ];
@@ -88,14 +88,14 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         ]));
     } else {
         text.push(Line::from(vec![
-            Span::styled("等待数据...", Style::default().fg(Color::DarkGray)),
+            Span::styled("Waiting data...", Style::default().fg(Color::DarkGray)),
         ]));
     }
 
     let paragraph = Paragraph::new(text)
         .block(
             Block::default()
-                .title("IMU姿态")
+                .title("📐IMU posture")
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan)),
         );
