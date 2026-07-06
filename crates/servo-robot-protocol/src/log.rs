@@ -2,7 +2,7 @@
 
 use crate::error::FrameError;
 use crate::frame::{FromPayload, ToPayload};
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 /// 日志级别
