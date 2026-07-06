@@ -160,7 +160,7 @@ impl ThermalSimulator {
 
 /// 电池状态模拟
 pub struct BatterySimulator {
-    pub percentage: f32,
+    pub soc: f32,
     pub charging: bool,
     pub cell_count: usize,
 }
@@ -168,7 +168,7 @@ pub struct BatterySimulator {
 impl BatterySimulator {
     pub fn new() -> Self {
         BatterySimulator {
-            percentage: 80.0f32,
+            soc: 80.0f32,
             charging: false,
             cell_count: 4,
         }
@@ -178,35 +178,38 @@ impl BatterySimulator {
         let mut rng = rand::rng();
 
         if self.charging {
-            self.percentage = (self.percentage + 0.01f32).min(100.0);
+            self.soc = (self.soc + 0.01f32).min(100.0);
         } else {
-            self.percentage = (self.percentage - 0.005f32).max(0.0);
+            self.soc = (self.soc - 0.005f32).max(0.0);
         }
 
-        // 电压随电量同步变化：满电16.8V，空电12.0V
-        let voltage = 12.0 + (self.percentage / 100.0) * 4.8;
-        let cell_voltage = voltage / self.cell_count as f32;
+        // 每节电芯电压随电量变化：满电4.2V，空电3.0V，限制在0~4.4V
+        let cell_base = 3.0f32 + (self.soc / 100.0) * 1.2;
         let cell_voltages: Vec<f32> = (0..self.cell_count)
-            .map(|_| cell_voltage + rng.random_range(-0.02f32..0.02))
+            .map(|_| (cell_base + rng.random_range(-0.02f32..0.02f32)).clamp(0.0, 4.4))
             .collect();
+        let voltage: f32 = cell_voltages.iter().sum();
         let cell_temps: Vec<f32> = (0..self.cell_count)
-            .map(|_| 28.0 + rng.random_range(-2.0f32..2.0))
+            .map(|_| 28.0f32 + rng.random_range(-2.0f32..2.0f32))
             .collect();
 
         // 放电电流在0.5-20A之间波动
         let current = if self.charging {
-            5.0 + rng.random_range(-4.5f32..5.0f32)
+            5.0f32 + rng.random_range(-4.5f32..5.0f32)
         } else {
-            10.0 + rng.random_range(-9.5f32..10.0f32)
+            10.0f32 + rng.random_range(-9.5f32..10.0f32)
         };
+
+        // 实际充满容量在4000~5200mAh之间波动
+        let capacity = 4600.0f32 + rng.random_range(-600.0f32..600.0f32);
 
         crate::protocol::battery_state::BatteryState {
             voltage,
             current,
-            soc: self.percentage * 50.0,
-            capacity: 5000.0,
+            soc: self.soc * 50.0,
+            capacity,
             design_capacity: 5000.0,
-            percentage: self.percentage,
+            percentage: self.soc,
             temperature: 28.0 + rng.random_range(-1.0f32..1.0),
             charge_status: if self.charging {
                 crate::protocol::battery_state::BatteryChargeStatus::Charging
@@ -256,13 +259,13 @@ impl SystemSimulator {
             uid: 0x12345678,    // 模拟唯一ID
             imu_id: 0x70,          // IMU ID
             uptime_s: uptime as u32,
-            reset_reason: crate::protocol::system::ResetReason::PowerOn,
-            error_code: 0,
             cpu_usage_percent: 35 + rng.random_range(0u8..15),
             free_heap_kb: 120 + rng.random_range(0u16..30),
             stack_watermark_min_kb: 8 + rng.random_range(0u16..4),
             i2c_error_count: 0,
+            spi_error_count: 0,
             uart_error_count: 0,
+            usb_error_count: 0,
             frames_sent_total: self.frame_count,
             pd_request_voltage: pd_voltage,
             pd_request_current: pd_current,
@@ -306,11 +309,65 @@ impl EventSimulator {
             crate::protocol::event::ProtectionFlags::empty()
         };
 
+        // 偶尔触发错误事件
+        let error_flags = if self.event_count % 800 == 0 {
+            crate::protocol::event::ErrorFlags::UART1_ERROR
+        } else if self.event_count % 1200 == 0 {
+            crate::protocol::event::ErrorFlags::I2C1_ERROR
+        } else {
+            crate::protocol::event::ErrorFlags::empty()
+        };
+
         crate::protocol::event::BoardEvent {
             charger_connected: self.charging,
             fan_enabled: self.event_count % 100 < 50,  // 模拟风扇开关
             charge_phase,
             protection_flags,
+            error_flags,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::protocol::frame::{FrameType, RawFrame};
+
+    #[test]
+    fn test_battery_voltage_range() {
+        let mut sim = BatterySimulator::new();
+        sim.soc = 100.0; // 满电测试
+        for _ in 0..100 {
+            let state = sim.generate();
+            for (i, v) in state.cell_voltages.iter().enumerate() {
+                assert!(*v >= 0.0 && *v <= 4.4, "Cell{} voltage {} out of range [0, 4.4]", i+1, v);
+            }
+        }
+    }
+
+    #[test]
+    fn test_battery_encode_decode_roundtrip() {
+        let mut sim = BatterySimulator::new();
+        sim.soc = 100.0;
+        let state = sim.generate();
+
+        let payload = state.to_bytes();
+        let payload_len = payload.len();
+
+        let frame = RawFrame {
+            frame_type: FrameType::Battery,
+            payload,
+        };
+        let encoded = frame.encode();
+        let (decoded, _) = RawFrame::decode(&encoded).unwrap();
+
+        assert_eq!(decoded.payload.len(), payload_len,
+            "Payload length mismatch: {} vs {}", decoded.payload.len(), payload_len);
+
+        let state2 = crate::protocol::battery_state::BatteryState::from_bytes(&decoded.payload).unwrap();
+
+        for (i, (v1, v2)) in state.cell_voltages.iter().zip(state2.cell_voltages.iter()).enumerate() {
+            assert!((v1 - v2).abs() < 0.05, "Cell{} voltage mismatch: {} vs {}", i+1, v1, v2);
         }
     }
 }

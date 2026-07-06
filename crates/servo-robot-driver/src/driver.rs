@@ -2,15 +2,9 @@
 
 use crate::dispatch::callback::DriverCallback;
 use crate::dispatch::{DriverEvent, EventBus};
+use crate::driver_common;
 use crate::error::DriverError;
-use crate::protocol::battery_state::BatteryState;
 use crate::protocol::config::{BoardConfigSnapshot, Config, ConfigType};
-use crate::protocol::event::BoardEvent;
-use crate::protocol::frame::{FrameType, RawFrame, TypedFrame};
-use crate::protocol::imu::ImuData;
-use crate::protocol::power::PowerData;
-use crate::protocol::thermal::ThermalData;
-use crate::protocol::system::SystemInfo;
 use crate::reconnect::ReconnectConfig;
 use crate::state::DriverState;
 use crate::transport::{Transport, TransportFactory};
@@ -36,6 +30,8 @@ pub struct Driver {
     state: Arc<DriverState>,
     /// 读取线程句柄
     read_handle: Option<JoinHandle<()>>,
+    /// 分发线程句柄
+    dispatch_handle: Option<JoinHandle<()>>,
     /// 运行标志
     running: Arc<AtomicBool>,
 }
@@ -50,6 +46,7 @@ impl Driver {
             bus: Arc::new(EventBus::new()),
             state: Arc::new(DriverState::new()),
             read_handle: None,
+            dispatch_handle: None,
             running: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -59,18 +56,6 @@ impl Driver {
     /// # Arguments
     /// * `factory` - 传输层工厂，每次重连时调用
     /// * `reconnect_config` - 重连配置
-    ///
-    /// # Example
-    /// ```rust,no_run
-    /// use servo_robot_driver::{Driver, SerialTransport, FnTransportFactory};
-    /// use servo_robot_driver::reconnect::ReconnectConfig;
-    ///
-    /// let factory = FnTransportFactory::new(|| {
-    ///     SerialTransport::open("/dev/ttyUSB0", 115200).map(|t| Box::new(t) as _)
-    /// });
-    /// let config = ReconnectConfig::new(5);
-    /// let driver = Driver::new_with_reconnect(factory, config);
-    /// ```
     pub fn new_with_reconnect(
         factory: impl TransportFactory,
         reconnect_config: ReconnectConfig,
@@ -85,49 +70,17 @@ impl Driver {
             bus: Arc::new(EventBus::new()),
             state: Arc::new(DriverState::new()),
             read_handle: None,
+            dispatch_handle: None,
             running: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    /// 注册 trait 回调（Pattern A）
+    /// 注册 trait 回调
     pub fn register_callback(&self, cb: impl DriverCallback) {
         self.bus.register_callback(cb);
     }
 
-    /// 注册闭包回调（Pattern B）
-    pub fn on_imu_data(&self, f: impl FnMut(&ImuData) + Send + 'static) {
-        self.bus.on_imu_data(f);
-    }
-
-    pub fn on_power_data(&self, f: impl FnMut(&PowerData) + Send + 'static) {
-        self.bus.on_power_data(f);
-    }
-
-    pub fn on_thermal_data(&self, f: impl FnMut(&ThermalData) + Send + 'static) {
-        self.bus.on_thermal_data(f);
-    }
-
-    pub fn on_battery_state(&self, f: impl FnMut(&BatteryState) + Send + 'static) {
-        self.bus.on_battery_state(f);
-    }
-
-    pub fn on_config_snapshot(&self, f: impl FnMut(&BoardConfigSnapshot) + Send + 'static) {
-        self.bus.on_config_snapshot(f);
-    }
-
-    pub fn on_board_event(&self, f: impl FnMut(&BoardEvent) + Send + 'static) {
-        self.bus.on_board_event(f);
-    }
-
-    pub fn on_system_info(&self, f: impl FnMut(&SystemInfo) + Send + 'static) {
-        self.bus.on_system_info(f);
-    }
-
-    pub fn on_error(&self, f: impl FnMut(&DriverError) + Send + 'static) {
-        self.bus.on_error(f);
-    }
-
-    /// 启动驱动（开启读取线程）
+    /// 启动驱动（开启读取线程 + 分发线程）
     pub fn start(&mut self) -> Result<(), DriverError> {
         if self.running.load(Ordering::Relaxed) {
             return Err(DriverError::NotRunning);
@@ -135,7 +88,10 @@ impl Driver {
 
         // 检查是否有可用的传输层
         {
-            let transport = self.transport.lock().map_err(|_| DriverError::LockPoisoned)?;
+            let transport = self
+                .transport
+                .lock()
+                .map_err(|_| DriverError::LockPoisoned)?;
             if transport.is_none() && self.transport_factory.is_none() {
                 return Err(DriverError::TransportClosed);
             }
@@ -151,11 +107,28 @@ impl Driver {
         let state = Arc::clone(&self.state);
         let running = Arc::clone(&self.running);
 
-        let handle = std::thread::spawn(move || {
-            Self::read_loop(transport, transport_factory, bus, state, running, reconnect_config);
+        // 读取线程：只做 I/O + 状态更新 + 发送事件到通道
+        let read_handle = std::thread::spawn(move || {
+            Self::read_loop(
+                transport,
+                transport_factory,
+                bus,
+                state,
+                running,
+                reconnect_config,
+            );
         });
 
-        self.read_handle = Some(handle);
+        let bus = Arc::clone(&self.bus);
+        let running = Arc::clone(&self.running);
+
+        // 分发线程：从通道消费事件，触发回调
+        let dispatch_handle = std::thread::spawn(move || {
+            Self::dispatch_loop(bus, running);
+        });
+
+        self.read_handle = Some(read_handle);
+        self.dispatch_handle = Some(dispatch_handle);
         Ok(())
     }
 
@@ -166,21 +139,19 @@ impl Driver {
         if let Some(handle) = self.read_handle.take() {
             handle.join().map_err(|_| DriverError::LockPoisoned)?;
         }
+        if let Some(handle) = self.dispatch_handle.take() {
+            handle.join().map_err(|_| DriverError::LockPoisoned)?;
+        }
 
         self.state.set_connected(false);
         Ok(())
     }
 
-    // ═══ 异步发送（不等待应答）═══
+    // ═══ 写入/查询（不等待应答）═══
 
-    /// 发送配置/命令到 STM32（不等待应答）
-    pub fn send_config(&self, config: Config) -> Result<(), DriverError> {
-        let frame = RawFrame {
-            frame_type: FrameType::CfgWrite,
-            payload: config.to_bytes(),
-        };
-        let encoded = frame.encode();
-
+    /// 写入配置到 STM32（不等待应答）
+    pub fn write_config(&self, config: Config) -> Result<(), DriverError> {
+        let encoded = driver_common::encode_cfg_write(&config);
         let mut transport = self.transport.lock().map_err(|_| DriverError::LockPoisoned)?;
         match transport.as_mut() {
             Some(t) => t.write_frame(&encoded)?,
@@ -191,12 +162,7 @@ impl Driver {
 
     /// 查询单个配置（不等待应答）
     pub fn query_config(&self, config_type: ConfigType) -> Result<(), DriverError> {
-        let frame = RawFrame {
-            frame_type: FrameType::CfgQuery,
-            payload: vec![config_type as u8],
-        };
-        let encoded = frame.encode();
-
+        let encoded = driver_common::encode_cfg_query(config_type);
         let mut transport = self.transport.lock().map_err(|_| DriverError::LockPoisoned)?;
         match transport.as_mut() {
             Some(t) => t.write_frame(&encoded)?,
@@ -207,28 +173,7 @@ impl Driver {
 
     /// 查询所有配置（不等待应答）
     pub fn query_all_configs(&self) -> Result<(), DriverError> {
-        let frame = RawFrame {
-            frame_type: FrameType::CfgQueryAll,
-            payload: vec![],
-        };
-        let encoded = frame.encode();
-
-        let mut transport = self.transport.lock().map_err(|_| DriverError::LockPoisoned)?;
-        match transport.as_mut() {
-            Some(t) => t.write_frame(&encoded)?,
-            None => return Err(DriverError::TransportClosed),
-        }
-        Ok(())
-    }
-
-    /// 写入配置（不等待应答）
-    pub fn write_config(&self, config: Config) -> Result<(), DriverError> {
-        let frame = RawFrame {
-            frame_type: FrameType::CfgWrite,
-            payload: config.to_bytes(),
-        };
-        let encoded = frame.encode();
-
+        let encoded = driver_common::encode_cfg_query_all();
         let mut transport = self.transport.lock().map_err(|_| DriverError::LockPoisoned)?;
         match transport.as_mut() {
             Some(t) => t.write_frame(&encoded)?,
@@ -238,8 +183,6 @@ impl Driver {
     }
 
     // ═══ 同步发送（等待应答）═══
-
-    /// 发送命令并等待确认
 
     /// 查询单个配置并等待响应
     pub fn query_config_sync(&self, config_type: ConfigType) -> Result<Config, DriverError> {
@@ -259,89 +202,51 @@ impl Driver {
         self.wait_for_ack_cfg_write(DEFAULT_TIMEOUT)
     }
 
-    // ═══ 等待应答 ═══
+    // ═══ 等待应答（使用 recv_timeout，不再 busy-poll）═══
 
-    /// 等待命令确认
-    fn wait_for_ack_cmd(&self, timeout: Duration) -> Result<bool, DriverError> {
-        let deadline = std::time::Instant::now() + timeout;
-
-        while std::time::Instant::now() < deadline {
-            match self.bus.try_recv_ack()? {
-                Some(event) => {
-                    if let DriverEvent::AckCfgWrite { success } = event {
-                        return Ok(success);
-                    }
-                }
-                None => {
-                    std::thread::sleep(Duration::from_millis(10));
-                }
-            }
-        }
-
-        Err(DriverError::Timeout)
-    }
-
-    /// 等待配置查询响应
     fn wait_for_ack_cfg_query(&self, timeout: Duration) -> Result<Config, DriverError> {
         let deadline = std::time::Instant::now() + timeout;
-
-        while std::time::Instant::now() < deadline {
-            match self.bus.try_recv_ack()? {
-                Some(event) => {
-                    if let DriverEvent::AckCfgQuery(config) = event {
-                        return Ok(config);
-                    }
-                }
-                None => {
-                    std::thread::sleep(Duration::from_millis(10));
-                }
+        loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(DriverError::Timeout);
+            }
+            match self.bus.recv_ack_timeout(remaining)? {
+                DriverEvent::AckCfgQuery(config) => return Ok(config),
+                _ => continue,
             }
         }
-
-        Err(DriverError::Timeout)
     }
 
-    /// 等待所有配置查询响应
     fn wait_for_ack_cfg_query_all(
         &self,
         timeout: Duration,
     ) -> Result<BoardConfigSnapshot, DriverError> {
         let deadline = std::time::Instant::now() + timeout;
-
-        while std::time::Instant::now() < deadline {
-            match self.bus.try_recv_ack()? {
-                Some(event) => {
-                    if let DriverEvent::AckCfgQueryAll(config) = event {
-                        return Ok(config);
-                    }
-                }
-                None => {
-                    std::thread::sleep(Duration::from_millis(10));
-                }
+        loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(DriverError::Timeout);
+            }
+            match self.bus.recv_ack_timeout(remaining)? {
+                DriverEvent::AckCfgQueryAll(config) => return Ok(config),
+                _ => continue,
             }
         }
-
-        Err(DriverError::Timeout)
     }
 
-    /// 等待配置写入确认
     fn wait_for_ack_cfg_write(&self, timeout: Duration) -> Result<bool, DriverError> {
         let deadline = std::time::Instant::now() + timeout;
-
-        while std::time::Instant::now() < deadline {
-            match self.bus.try_recv_ack()? {
-                Some(event) => {
-                    if let DriverEvent::AckCfgWrite { success } = event {
-                        return Ok(success);
-                    }
-                }
-                None => {
-                    std::thread::sleep(Duration::from_millis(10));
-                }
+        loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(DriverError::Timeout);
+            }
+            match self.bus.recv_ack_timeout(remaining)? {
+                DriverEvent::AckCfgWrite { success } => return Ok(success),
+                _ => continue,
             }
         }
-
-        Err(DriverError::Timeout)
     }
 
     /// 获取状态快照（给 TUI 用）
@@ -349,7 +254,28 @@ impl Driver {
         Arc::clone(&self.state)
     }
 
-    /// 内部读取循环
+    /// 分发线程：从事件通道消费事件，触发所有注册的回调
+    fn dispatch_loop(bus: Arc<EventBus>, running: Arc<AtomicBool>) {
+        while running.load(Ordering::Relaxed) {
+            // 阻塞接收，不浪费 CPU；超时 100ms 以便检查 running 标志
+            match bus.try_recv() {
+                Ok(Some(event)) => {
+                    bus.dispatch(&event);
+                }
+                Ok(None) => {
+                    // 通道为空，短暂休眠避免忙等
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                Err(_) => {
+                    // 通道已断开
+                    break;
+                }
+            }
+        }
+        log::info!("Dispatch loop exited");
+    }
+
+    /// 内部读取循环 — 只做 I/O + 状态更新，不触发回调
     fn read_loop(
         transport: Arc<Mutex<Option<Box<dyn Transport>>>>,
         transport_factory: Option<Arc<dyn TransportFactory>>,
@@ -381,15 +307,12 @@ impl Driver {
                                 &transport,
                                 factory.as_ref(),
                                 &state,
-                                &bus,
                                 reconnect_config.as_ref(),
                                 &mut retry_count,
                             );
                         } else {
                             state.set_error(DriverError::TransportClosed);
-                            bus.sender()
-                                .send(DriverEvent::Error(DriverError::TransportClosed))
-                                .ok();
+                            let _ = bus.sender().send(DriverEvent::Error(DriverError::TransportClosed));
                             break;
                         }
                         continue;
@@ -417,94 +340,27 @@ impl Driver {
                                 &transport,
                                 factory.as_ref(),
                                 &state,
-                                &bus,
                                 reconnect_config.as_ref(),
                                 &mut retry_count,
                             );
                         } else {
-                            bus.sender()
-                                .send(DriverEvent::Error(DriverError::TransportClosed))
-                                .ok();
+                            let _ = bus.sender().send(DriverEvent::Error(DriverError::TransportClosed));
                             break;
                         }
                         continue;
                     }
                     Err(e) => {
                         state.set_error(e.clone());
-                        bus.sender().send(DriverEvent::Error(e)).ok();
+                        let _ = bus.sender().send(DriverEvent::Error(e));
                         continue;
                     }
                 }
             };
 
-            // 解码帧
-            let raw_frame = match RawFrame::decode(&frame_data) {
-                Ok((frame, _)) => frame,
-                Err(e) => {
-                    log::warn!("Frame decode error: {}", e);
-                    state.increment_frames_dropped();
-                    continue;
-                }
-            };
-
-            // 解析为类型化帧
-            let typed_frame = match raw_frame.parse_typed() {
-                Ok(frame) => frame,
-                Err(e) => {
-                    log::warn!("Frame parse error: {}", e);
-                    state.increment_frames_dropped();
-                    continue;
-                }
-            };
-
-            // 成功解析，计数+1
-            state.increment_frames_parsed();
-
-            // 分发事件
-            let event = match typed_frame {
-                // 上行数据
-                TypedFrame::Imu(data) => {
-                    state.update_imu(data.clone());
-                    DriverEvent::ImuData(data)
-                }
-                TypedFrame::Power(data) => {
-                    state.update_power(data.clone());
-                    DriverEvent::PowerData(data)
-                }
-                TypedFrame::Thermal(data) => {
-                    state.update_thermal(data.clone());
-                    DriverEvent::ThermalData(data)
-                }
-                TypedFrame::Battery(bat) => {
-                    state.update_battery(bat.clone());
-                    DriverEvent::BatteryState(bat)
-                }
-                TypedFrame::Config(config) => {
-                    state.update_config(config.clone());
-                    DriverEvent::ConfigSnapshot(config)
-                }
-                TypedFrame::Event(event) => {
-                    state.update_event(event.clone());
-                    DriverEvent::BoardEvent(event)
-                }
-                TypedFrame::System(info) => {
-                    state.update_system(info.clone());
-                    DriverEvent::SystemInfo(info)
-                }
-
-                // 应答
-                TypedFrame::AckCfgWrite { success } => {
-                    DriverEvent::AckCfgWrite { success }
-                }
-                TypedFrame::AckCfgQuery(config) => {
-                    DriverEvent::AckCfgQuery(config)
-                }
-                TypedFrame::AckCfgQueryAll(config_snapshot) => {
-                    state.update_config(config_snapshot.clone());
-                    DriverEvent::AckCfgQueryAll(config_snapshot)
-                }
-                // 下行帧不应该被接收
-                _ => continue,
+            // 解码、解析、更新状态
+            let event = match driver_common::decode_and_dispatch(&frame_data, &state) {
+                Some(event) => event,
+                None => continue,
             };
 
             // 检查是否是 ACK 事件
@@ -515,17 +371,14 @@ impl Driver {
                     | DriverEvent::AckCfgWrite { .. }
             );
 
-            // 通过事件总线分发
-            bus.sender().send(event.clone()).ok();
+            // 发送到主事件通道（bounded，满时丢弃）
+            if bus.sender().send(event.clone()).is_err() {
+                log::warn!("Event channel full, event dropped");
+            }
 
             // ACK 事件同时发送到 ACK 通道（供同步等待使用）
             if is_ack {
-                bus.ack_sender().send(event).ok();
-            }
-
-            // 立即处理事件（触发回调）
-            if let Err(e) = bus.try_recv_and_dispatch() {
-                log::warn!("Event dispatch error: {}", e);
+                let _ = bus.ack_sender().send(event);
             }
         }
 
@@ -537,7 +390,6 @@ impl Driver {
         transport: &Arc<Mutex<Option<Box<dyn Transport>>>>,
         factory: &dyn TransportFactory,
         state: &Arc<DriverState>,
-        bus: &Arc<EventBus>,
         config: Option<&ReconnectConfig>,
         retry_count: &mut u32,
     ) {
@@ -549,9 +401,6 @@ impl Driver {
         if *retry_count >= config.max_retries {
             log::error!("Max retries ({}) reached", config.max_retries);
             state.set_error(DriverError::TransportClosed);
-            bus.sender()
-                .send(DriverEvent::Error(DriverError::TransportClosed))
-                .ok();
             return;
         }
 
@@ -566,18 +415,16 @@ impl Driver {
         std::thread::sleep(delay);
 
         match factory.create() {
-            Ok(new_transport) => {
-                match transport.lock() {
-                    Ok(mut guard) => {
-                        *guard = Some(new_transport);
-                        state.set_connected(true);
-                        log::info!("Reconnected successfully");
-                    }
-                    Err(e) => {
-                        log::error!("Failed to acquire transport lock: {}", e);
-                    }
+            Ok(new_transport) => match transport.lock() {
+                Ok(mut guard) => {
+                    *guard = Some(new_transport);
+                    state.set_connected(true);
+                    log::info!("Reconnected successfully");
                 }
-            }
+                Err(e) => {
+                    log::error!("Failed to acquire transport lock: {}", e);
+                }
+            },
             Err(e) => {
                 log::warn!("Reconnect failed: {}", e);
                 *retry_count += 1;

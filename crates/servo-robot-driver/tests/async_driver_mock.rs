@@ -2,13 +2,12 @@
 
 #![cfg(all(feature = "mock", feature = "async"))]
 
-use servo_robot_driver::protocol::command::Command;
 use servo_robot_driver::protocol::config::{Config, ConfigType};
 use servo_robot_driver::{AsyncDriver, DriverCallback, AsyncMockTransport};
 use servo_robot_driver::protocol::imu::ImuData;
 use servo_robot_driver::protocol::power::PowerData;
 use servo_robot_driver::protocol::battery_state::{BatteryState, BatteryChargeStatus};
-use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -144,26 +143,6 @@ async fn test_async_driver_receives_multiple_data_types() {
 }
 
 #[tokio::test]
-async fn test_async_driver_send_command_sync() {
-    let mock = AsyncMockTransport::new();
-    let mut driver = AsyncDriver::new(mock);
-
-    let (callback, stats) = TestCallback::new();
-    driver.register_callback(callback);
-    driver.start().await.unwrap();
-
-    // 等待驱动启动并接收一些数据
-    wait_until(Duration::from_secs(1), || stats.imu_count() > 0).await;
-
-    // 发送命令并等待确认
-    let result = driver.send_command_sync(Command::Reset).await;
-    assert!(result.is_ok(), "Command should succeed: {:?}", result.err());
-    assert!(result.unwrap(), "Command should be acknowledged as success");
-
-    driver.stop().await.unwrap();
-}
-
-#[tokio::test]
 async fn test_async_driver_query_config_sync() {
     let mock = AsyncMockTransport::new();
     let mut driver = AsyncDriver::new(mock);
@@ -236,28 +215,6 @@ async fn test_async_driver_state_snapshot() {
 }
 
 #[tokio::test]
-async fn test_async_driver_closure_callbacks() {
-    let mock = AsyncMockTransport::new();
-    let mut driver = AsyncDriver::new(mock);
-
-    let imu_received = Arc::new(AtomicBool::new(false));
-    let imu_received_clone = imu_received.clone();
-
-    driver.on_imu_data(move |_data| {
-        imu_received_clone.store(true, Ordering::Relaxed);
-    });
-
-    driver.start().await.unwrap();
-
-    let received = wait_until(Duration::from_secs(2), || {
-        imu_received.load(Ordering::Relaxed)
-    }).await;
-    assert!(received, "Should receive IMU via closure callback");
-
-    driver.stop().await.unwrap();
-}
-
-#[tokio::test]
 async fn test_async_driver_battery_monitoring() {
     let mock = AsyncMockTransport::new();
     let mut driver = AsyncDriver::new(mock);
@@ -303,7 +260,7 @@ async fn test_async_driver_mock_initial_attitude() {
 async fn test_async_driver_mock_charging() {
     let mut mock = AsyncMockTransport::new();
     mock.set_charging(true);
-    mock.set_battery_percentage(50.0);
+    mock.set_battery_soc(50.0);
 
     let mut driver = AsyncDriver::new(mock);
 

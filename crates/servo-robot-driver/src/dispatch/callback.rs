@@ -1,21 +1,23 @@
-//! Pattern A: DriverCallback trait 定义
+//! DriverCallback trait 定义
 
 use crate::error::DriverError;
 use crate::protocol::battery_state::BatteryState;
 use crate::protocol::config::{BoardConfigSnapshot, Config};
 use crate::protocol::event::BoardEvent;
-
 use crate::protocol::imu::ImuData;
+use crate::protocol::log::{LogLevel, LogMessage};
 use crate::protocol::power::PowerData;
 use crate::protocol::thermal::ThermalData;
 use crate::protocol::system::SystemInfo;
 
 /// 回调 trait — 实现感兴趣的回调，其余用默认空实现
 ///
+/// 回调在独立的分发线程上触发，不会阻塞读线程。
+///
 /// # Example
 ///
 /// ```rust
-/// use servo_robot_driver::dispatch::callback::DriverCallback;
+/// use servo_robot_driver::DriverCallback;
 /// use servo_robot_driver::protocol::imu::ImuData;
 ///
 /// struct MyCallback {
@@ -38,8 +40,25 @@ pub trait DriverCallback: Send + 'static {
     fn on_board_event(&mut self, _event: &BoardEvent) {}
     fn on_system_info(&mut self, _info: &SystemInfo) {}
 
-    /// 命令确认回调
-    fn on_ack_cmd(&mut self, _success: bool) {}
+    /// 板级日志回调
+    ///
+    /// `ts` 为 Unix 时间戳（毫秒），在读线程解码帧时采集。
+    /// 默认实现通过 `log` 库输出，带 `[ServoRobotBoard]` 前缀。
+    /// TUI/ROS2 可覆盖此方法自行处理日志。
+    fn on_log(&mut self, ts: u64, log_msg: &LogMessage) {
+        let total_s = ts / 1000;
+        let ms = ts % 1000;
+        let h = (total_s % 86400) / 3600;
+        let m = (total_s % 3600) / 60;
+        let s = total_s % 60;
+        let prefix = "[ServoRobotBoard]";
+        match log_msg.level {
+            LogLevel::Error => log::error!("{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}", prefix, h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg),
+            LogLevel::Warn => log::warn!("{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}", prefix, h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg),
+            LogLevel::Info | LogLevel::OFF => log::info!("{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}", prefix, h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg),
+            LogLevel::Debug => log::debug!("{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}", prefix, h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg),
+        }
+    }
 
     /// 配置写入确认回调
     fn on_ack_cfg_write(&mut self, _success: bool) {}

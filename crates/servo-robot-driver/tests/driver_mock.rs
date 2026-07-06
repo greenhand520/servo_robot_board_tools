@@ -8,8 +8,7 @@ use servo_robot_driver::{Driver, DriverCallback, MockTransport};
 use servo_robot_driver::protocol::imu::ImuData;
 use servo_robot_driver::protocol::power::PowerData;
 use servo_robot_driver::protocol::battery_state::{BatteryState, BatteryChargeStatus};
-use servo_robot_driver::protocol::system::SystemInfo;
-use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -18,8 +17,6 @@ struct TestCallback {
     imu_count: Arc<AtomicU64>,
     power_count: Arc<AtomicU64>,
     battery_count: Arc<AtomicU64>,
-    ack_cmd_count: Arc<AtomicU64>,
-    ack_cmd_success: Arc<AtomicBool>,
     last_imu: Arc<Mutex<Option<ImuData>>>,
     last_battery: Arc<Mutex<Option<BatteryState>>>,
 }
@@ -29,8 +26,6 @@ impl TestCallback {
         let imu_count = Arc::new(AtomicU64::new(0));
         let power_count = Arc::new(AtomicU64::new(0));
         let battery_count = Arc::new(AtomicU64::new(0));
-        let ack_cmd_count = Arc::new(AtomicU64::new(0));
-        let ack_cmd_success = Arc::new(AtomicBool::new(false));
         let last_imu = Arc::new(Mutex::new(None));
         let last_battery = Arc::new(Mutex::new(None));
 
@@ -38,8 +33,6 @@ impl TestCallback {
             imu_count: imu_count.clone(),
             power_count: power_count.clone(),
             battery_count: battery_count.clone(),
-            ack_cmd_count: ack_cmd_count.clone(),
-            ack_cmd_success: ack_cmd_success.clone(),
             last_imu: last_imu.clone(),
             last_battery: last_battery.clone(),
         };
@@ -48,8 +41,6 @@ impl TestCallback {
             imu_count,
             power_count,
             battery_count,
-            ack_cmd_count,
-            ack_cmd_success,
             last_imu,
             last_battery,
         };
@@ -62,8 +53,6 @@ struct CallbackStats {
     imu_count: Arc<AtomicU64>,
     power_count: Arc<AtomicU64>,
     battery_count: Arc<AtomicU64>,
-    ack_cmd_count: Arc<AtomicU64>,
-    ack_cmd_success: Arc<AtomicBool>,
     last_imu: Arc<Mutex<Option<ImuData>>>,
     last_battery: Arc<Mutex<Option<BatteryState>>>,
 }
@@ -79,10 +68,6 @@ impl CallbackStats {
 
     fn battery_count(&self) -> u64 {
         self.battery_count.load(Ordering::Relaxed)
-    }
-
-    fn ack_cmd_count(&self) -> u64 {
-        self.ack_cmd_count.load(Ordering::Relaxed)
     }
 
     fn last_imu(&self) -> Option<ImuData> {
@@ -107,11 +92,6 @@ impl DriverCallback for TestCallback {
     fn on_battery_state(&mut self, state: &BatteryState) {
         self.battery_count.fetch_add(1, Ordering::Relaxed);
         *self.last_battery.lock().unwrap() = Some(state.clone());
-    }
-
-    fn on_ack_cmd(&mut self, success: bool) {
-        self.ack_cmd_count.fetch_add(1, Ordering::Relaxed);
-        self.ack_cmd_success.store(success, Ordering::Relaxed);
     }
 }
 
@@ -164,7 +144,7 @@ fn test_driver_receives_multiple_data_types() {
 }
 
 #[test]
-fn test_driver_send_command_sync() {
+fn test_driver_write_config_sync() {
     let mock = MockTransport::new();
     let mut driver = Driver::new(mock);
 
@@ -175,7 +155,7 @@ fn test_driver_send_command_sync() {
     // 等待驱动启动并接收一些数据
     wait_until(Duration::from_secs(1), || stats.imu_count() > 0);
 
-    // 发送命令并等待确认（增加超时时间）
+    // 发送命令并等待确认
     let result = driver.write_config_sync(Config::Reset);
     assert!(result.is_ok(), "Command should succeed: {:?}", result.err());
     assert!(result.unwrap(), "Command should be acknowledged as success");
@@ -221,7 +201,7 @@ fn test_driver_query_all_configs_sync() {
 }
 
 #[test]
-fn test_driver_write_config_sync() {
+fn test_driver_write_config_value_sync() {
     let mock = MockTransport::new();
     let mut driver = Driver::new(mock);
 
@@ -253,28 +233,6 @@ fn test_driver_state_snapshot() {
 
     let imu = snap.imu.unwrap();
     assert!(imu.accel[2] > 8.0, "Should have gravity component");
-
-    driver.stop().unwrap();
-}
-
-#[test]
-fn test_driver_closure_callbacks() {
-    let mock = MockTransport::new();
-    let mut driver = Driver::new(mock);
-
-    let imu_received = Arc::new(AtomicBool::new(false));
-    let imu_received_clone = imu_received.clone();
-
-    driver.on_imu_data(move |_data| {
-        imu_received_clone.store(true, Ordering::Relaxed);
-    });
-
-    driver.start().unwrap();
-
-    let received = wait_until(Duration::from_secs(2), || {
-        imu_received.load(Ordering::Relaxed)
-    });
-    assert!(received, "Should receive IMU via closure callback");
 
     driver.stop().unwrap();
 }
@@ -325,7 +283,7 @@ fn test_driver_mock_initial_attitude() {
 fn test_driver_mock_charging() {
     let mut mock = MockTransport::new();
     mock.set_charging(true);
-    mock.set_battery_percentage(50.0);
+    mock.set_battery_soc(50.0);
 
     let mut driver = Driver::new(mock);
 

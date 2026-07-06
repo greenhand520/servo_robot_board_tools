@@ -4,16 +4,12 @@ pub mod factory;
 pub mod frame_codec;
 #[cfg(feature = "mock")]
 pub mod mock;
-#[cfg(feature = "mock")]
-pub mod mock_data;
 pub mod serial;
 
 #[cfg(feature = "async")]
 pub mod async_trait;
 #[cfg(feature = "async")]
 pub mod async_serial;
-#[cfg(all(feature = "mock", feature = "async"))]
-pub mod async_mock;
 
 use crate::error::DriverError;
 
@@ -42,4 +38,4 @@ pub use async_trait::{AsyncTransport, AsyncTransportFactory, FnAsyncTransportFac
 #[cfg(feature = "async")]
 pub use async_serial::TokioSerialTransport;
 #[cfg(all(feature = "mock", feature = "async"))]
-pub use async_mock::AsyncMockTransport;
+pub use mock::AsyncMockTransport;

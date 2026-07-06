@@ -2,13 +2,14 @@
 
 pub mod dispatch;
 pub mod driver;
+pub(crate) mod driver_common;
 pub mod error;
 pub mod reconnect;
 pub mod state;
 pub mod transport;
 
 #[cfg(feature = "async")]
-pub mod driver_async;
+pub mod async_driver;
 
 // 重导出协议层
 pub use servo_robot_protocol as protocol;
@@ -30,7 +31,7 @@ pub use transport::MockTransport;
 
 // 异步传输层（需要启用 async feature）
 #[cfg(feature = "async")]
-pub use driver_async::AsyncDriver;
+pub use async_driver::AsyncDriver;
 #[cfg(feature = "async")]
 pub use transport::{AsyncTransport, AsyncTransportFactory, FnAsyncTransportFactory, TokioSerialTransport};
 #[cfg(all(feature = "mock", feature = "async"))]

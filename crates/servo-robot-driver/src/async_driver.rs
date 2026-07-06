@@ -2,15 +2,9 @@
 
 use crate::dispatch::callback::DriverCallback;
 use crate::dispatch::{DriverEvent, EventBus};
+use crate::driver_common;
 use crate::error::DriverError;
-use crate::protocol::battery_state::BatteryState;
 use crate::protocol::config::{BoardConfigSnapshot, Config, ConfigType};
-use crate::protocol::event::BoardEvent;
-use crate::protocol::frame::{FrameType, RawFrame, TypedFrame};
-use crate::protocol::imu::ImuData;
-use crate::protocol::power::PowerData;
-use crate::protocol::thermal::ThermalData;
-use crate::protocol::system::SystemInfo;
 use crate::reconnect::ReconnectConfig;
 use crate::state::DriverState;
 use crate::transport::async_trait::{AsyncTransport, AsyncTransportFactory};
@@ -37,7 +31,9 @@ pub struct AsyncDriver {
     /// 状态快照
     state: Arc<DriverState>,
     /// 读取任务句柄
-    handle: Option<JoinHandle<()>>,
+    read_handle: Option<JoinHandle<()>>,
+    /// 分发任务句柄
+    dispatch_handle: Option<JoinHandle<()>>,
     /// 运行标志
     running: Arc<AtomicBool>,
 }
@@ -52,7 +48,8 @@ impl AsyncDriver {
             reconnect_config: None,
             bus: Arc::new(EventBus::new()),
             state: Arc::new(DriverState::new()),
-            handle: None,
+            read_handle: None,
+            dispatch_handle: None,
             running: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -68,47 +65,15 @@ impl AsyncDriver {
             reconnect_config: Some(reconnect_config),
             bus: Arc::new(EventBus::new()),
             state: Arc::new(DriverState::new()),
-            handle: None,
+            read_handle: None,
+            dispatch_handle: None,
             running: Arc::new(AtomicBool::new(false)),
         }
     }
 
-    /// 注册 trait 回调（Pattern A）
+    /// 注册 trait 回调
     pub fn register_callback(&self, cb: impl DriverCallback) {
         self.bus.register_callback(cb);
-    }
-
-    /// 注册闭包回调（Pattern B）
-    pub fn on_imu_data(&self, f: impl FnMut(&ImuData) + Send + 'static) {
-        self.bus.on_imu_data(f);
-    }
-
-    pub fn on_power_data(&self, f: impl FnMut(&PowerData) + Send + 'static) {
-        self.bus.on_power_data(f);
-    }
-
-    pub fn on_thermal_data(&self, f: impl FnMut(&ThermalData) + Send + 'static) {
-        self.bus.on_thermal_data(f);
-    }
-
-    pub fn on_battery_state(&self, f: impl FnMut(&BatteryState) + Send + 'static) {
-        self.bus.on_battery_state(f);
-    }
-
-    pub fn on_config_snapshot(&self, f: impl FnMut(&BoardConfigSnapshot) + Send + 'static) {
-        self.bus.on_config_snapshot(f);
-    }
-
-    pub fn on_board_event(&self, f: impl FnMut(&BoardEvent) + Send + 'static) {
-        self.bus.on_board_event(f);
-    }
-
-    pub fn on_system_info(&self, f: impl FnMut(&SystemInfo) + Send + 'static) {
-        self.bus.on_system_info(f);
-    }
-
-    pub fn on_error(&self, f: impl FnMut(&DriverError) + Send + 'static) {
-        self.bus.on_error(f);
     }
 
     /// 启动异步驱动
@@ -134,16 +99,26 @@ impl AsyncDriver {
         let state = self.state.clone();
         let running = self.running.clone();
 
-        let handle = tokio::spawn(Self::read_loop(
+        // 读取任务：只做 I/O + 状态更新
+        let read_handle = tokio::spawn(Self::read_loop(
             transport,
             transport_factory,
-            bus,
+            bus.clone(),
             state,
-            running,
+            running.clone(),
             reconnect_config,
         ));
 
-        self.handle = Some(handle);
+        let bus = self.bus.clone();
+        let running = self.running.clone();
+
+        // 分发任务：从通道消费事件，触发回调
+        let dispatch_handle = tokio::spawn(async move {
+            Self::dispatch_loop(bus, running).await;
+        });
+
+        self.read_handle = Some(read_handle);
+        self.dispatch_handle = Some(dispatch_handle);
         Ok(())
     }
 
@@ -151,7 +126,10 @@ impl AsyncDriver {
     pub async fn stop(&mut self) -> Result<(), DriverError> {
         self.running.store(false, Ordering::Relaxed);
 
-        if let Some(handle) = self.handle.take() {
+        if let Some(handle) = self.read_handle.take() {
+            handle.await.map_err(|_| DriverError::LockPoisoned)?;
+        }
+        if let Some(handle) = self.dispatch_handle.take() {
             handle.await.map_err(|_| DriverError::LockPoisoned)?;
         }
 
@@ -159,15 +137,10 @@ impl AsyncDriver {
         Ok(())
     }
 
-    // ═══ 异步发送（不等待应答）═══
+    // ═══ 写入/查询（不等待应答）═══
 
-    pub async fn send_config_cmd(&self, config: Config) -> Result<(), DriverError> {
-        let frame = RawFrame {
-            frame_type: FrameType::Cmd,
-            payload: cmd.to_bytes(),
-        };
-        let encoded = frame.encode();
-
+    pub async fn write_config(&self, config: Config) -> Result<(), DriverError> {
+        let encoded = driver_common::encode_cfg_write(&config);
         let mut transport = self.transport.lock().await;
         match transport.as_mut() {
             Some(t) => t.write_frame(&encoded).await?,
@@ -177,12 +150,7 @@ impl AsyncDriver {
     }
 
     pub async fn query_config(&self, config_type: ConfigType) -> Result<(), DriverError> {
-        let frame = RawFrame {
-            frame_type: FrameType::CfgQuery,
-            payload: vec![config_type as u8],
-        };
-        let encoded = frame.encode();
-
+        let encoded = driver_common::encode_cfg_query(config_type);
         let mut transport = self.transport.lock().await;
         match transport.as_mut() {
             Some(t) => t.write_frame(&encoded).await?,
@@ -192,27 +160,7 @@ impl AsyncDriver {
     }
 
     pub async fn query_all_configs(&self) -> Result<(), DriverError> {
-        let frame = RawFrame {
-            frame_type: FrameType::CfgQueryAll,
-            payload: vec![],
-        };
-        let encoded = frame.encode();
-
-        let mut transport = self.transport.lock().await;
-        match transport.as_mut() {
-            Some(t) => t.write_frame(&encoded).await?,
-            None => return Err(DriverError::TransportClosed),
-        }
-        Ok(())
-    }
-
-    pub async fn write_config(&self, config: Config) -> Result<(), DriverError> {
-        let frame = RawFrame {
-            frame_type: FrameType::CfgWrite,
-            payload: config.to_bytes(),
-        };
-        let encoded = frame.encode();
-
+        let encoded = driver_common::encode_cfg_query_all();
         let mut transport = self.transport.lock().await;
         match transport.as_mut() {
             Some(t) => t.write_frame(&encoded).await?,
@@ -222,7 +170,6 @@ impl AsyncDriver {
     }
 
     // ═══ 同步发送（等待应答）═══
-
 
     pub async fn query_config_sync(&self, config_type: ConfigType) -> Result<Config, DriverError> {
         self.query_config(config_type).await?;
@@ -237,22 +184,6 @@ impl AsyncDriver {
     pub async fn write_config_sync(&self, config: Config) -> Result<bool, DriverError> {
         self.write_config(config).await?;
         self.wait_for_ack_cfg_write(DEFAULT_TIMEOUT).await
-    }
-
-    // ═══ 等待应答 ═══
-
-    async fn wait_for_ack_cmd(&self, timeout: Duration) -> Result<bool, DriverError> {
-        match tokio::time::timeout(timeout, self.bus.recv_ack_async()).await {
-            Ok(Ok(event)) => {
-                if let DriverEvent::AckCfgWrite { success } = event {
-                    Ok(success)
-                } else {
-                    Err(DriverError::Timeout)
-                }
-            }
-            Ok(Err(e)) => Err(e),
-            Err(_) => Err(DriverError::Timeout),
-        }
     }
 
     async fn wait_for_ack_cfg_query(&self, timeout: Duration) -> Result<Config, DriverError> {
@@ -305,15 +236,38 @@ impl AsyncDriver {
         self.state.clone()
     }
 
-    /// 异步读取循环
+    /// 分发任务：从事件通道消费事件，触发回调
+    async fn dispatch_loop(bus: Arc<EventBus>, running: Arc<AtomicBool>) {
+        while running.load(Ordering::Relaxed) {
+            // 使用 recv_async + timeout 实现高效的异步等待
+            match tokio::time::timeout(Duration::from_millis(100), bus.recv_async()).await {
+                Ok(Ok(event)) => {
+                    bus.dispatch(&event);
+                }
+                Ok(Err(_)) => {
+                    // 通道断开
+                    break;
+                }
+                Err(_) => {
+                    // 超时，继续循环检查 running 标志
+                    continue;
+                }
+            }
+        }
+        log::info!("Async dispatch loop exited");
+    }
+
+    /// 异步读取循环 — 只做 I/O + 状态更新，不触发回调
     async fn read_loop(
         transport: Arc<Mutex<Option<Box<dyn AsyncTransport>>>>,
-        _transport_factory: Option<Arc<dyn AsyncTransportFactory>>,
+        transport_factory: Option<Arc<dyn AsyncTransportFactory>>,
         bus: Arc<EventBus>,
         state: Arc<DriverState>,
         running: Arc<AtomicBool>,
-        _reconnect_config: Option<ReconnectConfig>,
+        reconnect_config: Option<ReconnectConfig>,
     ) {
+        let mut retry_count = 0;
+
         while running.load(Ordering::Relaxed) {
             // 读取一帧
             let frame_data = {
@@ -322,118 +276,127 @@ impl AsyncDriver {
                 let current_transport = match transport_guard.as_mut() {
                     Some(t) => t,
                     None => {
-                        state.set_error(DriverError::TransportClosed);
-                        bus.sender()
-                            .send(DriverEvent::Error(DriverError::TransportClosed))
-                            .ok();
-                        break;
+                        // 传输层不可用，尝试重连
+                        drop(transport_guard);
+                        if let Some(ref factory) = transport_factory {
+                            Self::attempt_reconnect(
+                                &transport,
+                                factory.as_ref(),
+                                &state,
+                                reconnect_config.as_ref(),
+                                &mut retry_count,
+                            )
+                            .await;
+                        } else {
+                            state.set_error(DriverError::TransportClosed);
+                            let _ = bus.sender().send(DriverEvent::Error(DriverError::TransportClosed));
+                            break;
+                        }
+                        continue;
                     }
                 };
 
                 match current_transport.read_frame().await {
-                    Ok(data) => data,
+                    Ok(data) => {
+                        retry_count = 0;
+                        data
+                    }
                     Err(DriverError::TransportClosed) => {
+                        log::warn!("Async connection lost");
                         state.set_connected(false);
                         *transport_guard = None;
-                        bus.sender()
-                            .send(DriverEvent::Error(DriverError::TransportClosed))
-                            .ok();
+
+                        if let Some(ref factory) = transport_factory {
+                            drop(transport_guard);
+                            Self::attempt_reconnect(
+                                &transport,
+                                factory.as_ref(),
+                                &state,
+                                reconnect_config.as_ref(),
+                                &mut retry_count,
+                            )
+                            .await;
+                        } else {
+                            let _ = bus.sender().send(DriverEvent::Error(DriverError::TransportClosed));
+                            break;
+                        }
                         continue;
                     }
                     Err(e) => {
                         state.set_error(e.clone());
-                        bus.sender().send(DriverEvent::Error(e)).ok();
+                        let _ = bus.sender().send(DriverEvent::Error(e));
                         continue;
                     }
                 }
             };
 
-            // 解码帧
-            let raw_frame = match RawFrame::decode(&frame_data) {
-                Ok((frame, _)) => frame,
-                Err(e) => {
-                    log::warn!("Frame decode error: {}", e);
-                    state.increment_frames_dropped();
-                    continue;
-                }
-            };
-
-            // 解析为类型化帧
-            let typed_frame = match raw_frame.parse_typed() {
-                Ok(frame) => frame,
-                Err(e) => {
-                    log::warn!("Frame parse error: {}", e);
-                    state.increment_frames_dropped();
-                    continue;
-                }
-            };
-
-            // 成功解析，计数+1
-            state.increment_frames_parsed();
-
-            // 分发事件
-            let event = match typed_frame {
-                TypedFrame::Imu(data) => {
-                    state.update_imu(data.clone());
-                    DriverEvent::ImuData(data)
-                }
-                TypedFrame::Power(data) => {
-                    state.update_power(data.clone());
-                    DriverEvent::PowerData(data)
-                }
-                TypedFrame::Thermal(data) => {
-                    state.update_thermal(data.clone());
-                    DriverEvent::ThermalData(data)
-                }
-                TypedFrame::Battery(bat) => {
-                    state.update_battery(bat.clone());
-                    DriverEvent::BatteryState(bat)
-                }
-                TypedFrame::Config(config) => {
-                    state.update_config(config.clone());
-                    DriverEvent::ConfigSnapshot(config)
-                }
-                TypedFrame::Event(event) => {
-                    state.update_event(event.clone());
-                    DriverEvent::BoardEvent(event)
-                }
-                TypedFrame::System(info) => {
-                    state.update_system(info.clone());
-                    DriverEvent::SystemInfo(info)
-                }
-                TypedFrame::AckCfgWrite { success } => DriverEvent::AckCfgWrite { success },
-                TypedFrame::AckCfgQuery(config) => DriverEvent::AckCfgQuery(config),
-                TypedFrame::AckCfgQueryAll(config_snapshot) => {
-                    state.update_config(config_snapshot.clone());
-                    DriverEvent::AckCfgQueryAll(config_snapshot)
-                }
-                
-                _ => continue,
+            // 解码、解析、更新状态
+            let event = match driver_common::decode_and_dispatch(&frame_data, &state) {
+                Some(event) => event,
+                None => continue,
             };
 
             // 检查是否是 ACK 事件
             let is_ack = matches!(
                 event,
-                                    | DriverEvent::AckCfgQuery(_)
+                DriverEvent::AckCfgQuery(_)
                     | DriverEvent::AckCfgQueryAll(_)
                     | DriverEvent::AckCfgWrite { .. }
             );
 
-            // 通过事件总线分发
-            bus.sender().send(event.clone()).ok();
+            // 发送到主事件通道
+            let _ = bus.sender().send(event.clone());
 
             // ACK 事件同时发送到 ACK 通道
             if is_ack {
-                bus.ack_sender().send(event).ok();
-            }
-
-            // 立即处理事件（触发回调）
-            if let Err(e) = bus.try_recv_and_dispatch() {
-                log::warn!("Event dispatch error: {}", e);
+                let _ = bus.ack_sender().send(event);
             }
         }
 
         log::info!("Async read loop exited");
+    }
+
+    /// 尝试重连
+    async fn attempt_reconnect(
+        transport: &Arc<Mutex<Option<Box<dyn AsyncTransport>>>>,
+        factory: &dyn AsyncTransportFactory,
+        state: &Arc<DriverState>,
+        config: Option<&ReconnectConfig>,
+        retry_count: &mut u32,
+    ) {
+        let config = match config {
+            Some(c) => c,
+            None => return,
+        };
+
+        if *retry_count >= config.max_retries {
+            log::error!("Max retries ({}) reached", config.max_retries);
+            state.set_error(DriverError::TransportClosed);
+            return;
+        }
+
+        let delay = config.delay_for_retry(*retry_count);
+        log::info!(
+            "Reconnecting in {:?} (attempt {}/{})",
+            delay,
+            *retry_count + 1,
+            config.max_retries
+        );
+
+        tokio::time::sleep(delay).await;
+
+        match factory.create().await {
+            Ok(new_transport) => {
+                let mut guard = transport.lock().await;
+                *guard = Some(new_transport);
+                state.set_connected(true);
+                log::info!("Reconnected successfully");
+            }
+            Err(e) => {
+                log::warn!("Reconnect failed: {}", e);
+                *retry_count += 1;
+            }
+        }
     }
 }
 
@@ -442,5 +405,7 @@ impl Drop for AsyncDriver {
     fn drop(&mut self) {
         // 注意：在 async 上下文中无法直接调用 async stop()
         // 用户应该在 drop 前显式调用 stop().await
+        // 设置 running=false 以便 tokio task 自行退出
+        self.running.store(false, Ordering::Relaxed);
     }
 }
