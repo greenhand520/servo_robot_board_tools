@@ -365,3 +365,20 @@ impl FromPayload for BoardConfigSnapshot {
         Self::from_bytes(p)
     }
 }
+
+impl core::fmt::Display for BoardConfigSnapshot {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "servo={:.1}A/{:.1}°C 5v={:.1}°C chg={:.1}A/{:.1}-{:.1}°C/{:.1}V/{:.0}% pd={}V/{}mA sw=[{},{},{},{},{}] log={}",
+            self.servo_current_limit, self.servo_temp_limit,
+            self.temp_5v_limit,
+            self.charge_max_current, self.charge_temp_derating, self.charge_temp_limit,
+            self.charge_stop_voltage, self.charge_stop_percentage * 100.0,
+            self.pd_negotiated_mv, self.pd_negotiated_ma,
+            if self.servo_power_on { "S" } else { "-" },
+            if self.power_5v_on { "5" } else { "-" },
+            if self.charge_on { "C" } else { "-" },
+            if self.bat_ext_out_on { "B" } else { "-" },
+            if self.charge_enable { "E" } else { "-" },
+            self.tx_log_level as u8)
+    }
+}

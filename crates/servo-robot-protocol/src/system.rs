@@ -77,3 +77,13 @@ impl SystemInfo {
 
 impl ToPayload for SystemInfo { fn to_payload(&self) -> Vec<u8> { self.to_bytes() } }
 impl FromPayload for SystemInfo { fn from_payload(p: &[u8]) -> Result<Self, FrameError> { Self::from_bytes(p) } }
+
+impl core::fmt::Display for SystemInfo {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "up={}s cpu={}% heap={}KB stack={}KB frames={} errs(i={},s={},u={},usb={}) pd={}V/{}A",
+            self.uptime_s, self.cpu_usage_percent, self.free_heap_kb, self.stack_watermark_min_kb,
+            self.frames_sent_total,
+            self.i2c_error_count, self.spi_error_count, self.uart_error_count, self.usb_error_count,
+            self.pd_request_voltage/1000, self.pd_request_current/1000)
+    }
+}

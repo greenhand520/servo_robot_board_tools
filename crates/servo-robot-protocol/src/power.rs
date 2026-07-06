@@ -44,3 +44,12 @@ impl PowerData {
 
 impl ToPayload for PowerData { fn to_payload(&self) -> Vec<u8> { self.to_bytes() } }
 impl FromPayload for PowerData { fn from_payload(p: &[u8]) -> Result<Self, FrameError> { Self::from_bytes(p) } }
+
+impl core::fmt::Display for PowerData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "servo={:.1}V/{:.1}A pd_in={:.1}V/{:.1}A bat={:.1}V/{:.1}A",
+            self.servo_voltage, self.servo_current,
+            self.charge_in_voltage, self.charge_in_current,
+            self.bat_voltage, self.bat_current)
+    }
+}

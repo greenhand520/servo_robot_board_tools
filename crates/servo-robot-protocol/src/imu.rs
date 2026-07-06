@@ -73,6 +73,15 @@ impl FromPayload for ImuData {
     fn from_payload(payload: &[u8]) -> Result<Self, FrameError> { Self::from_bytes(payload) }
 }
 
+impl core::fmt::Display for ImuData {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "r={:.1} p={:.1} y={:.1} a=[{:.2},{:.2},{:.2}] g=[{:.2},{:.2},{:.2}]",
+            self.roll, self.pitch, self.yaw,
+            self.accel[0], self.accel[1], self.accel[2],
+            self.gyro[0], self.gyro[1], self.gyro[2])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,8 +1,8 @@
 # servo-robot-protocol
 
-STM32 Robot Communication Protocol Definition, supports `no_std` + `alloc`, compatible with PC and embedded platforms.
+English | [简体中文](README.md)
 
-**[中文版](README.md)**
+STM32 Robot Communication Protocol Definition, supports `no_std` + `alloc`, compatible with PC and embedded platforms.
 
 ## Features
 

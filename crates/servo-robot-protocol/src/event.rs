@@ -101,3 +101,12 @@ impl BoardEvent {
 
 impl ToPayload for BoardEvent { fn to_payload(&self) -> Vec<u8> { self.to_bytes() } }
 impl FromPayload for BoardEvent { fn from_payload(p: &[u8]) -> Result<Self, FrameError> { Self::from_bytes(p) } }
+
+impl core::fmt::Display for BoardEvent {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "charger={} fan={} phase={} prot=0x{:04X} err=0x{:04X}",
+            self.charger_connected, self.fan_enabled,
+            self.charge_phase as u8,
+            self.protection_flags.bits(), self.error_flags.bits())
+    }
+}

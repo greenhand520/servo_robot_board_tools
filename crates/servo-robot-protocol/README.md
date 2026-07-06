@@ -1,7 +1,8 @@
 # servo-robot-protocol
 
+[English](README_en.md) | 简体中文
+
 STM32 机器人通信协议定义，支持 `no_std` + `alloc`，可用于 PC 和嵌入式平台。
-[English Version](README_en.md)
 
 ## 特性
 

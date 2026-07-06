@@ -199,3 +199,17 @@ impl FromPayload for BatteryState {
         Self::from_bytes(p)
     }
 }
+
+impl core::fmt::Display for BatteryState {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{:.1}% {:.1}V {:.1}A {:.1}°C {}",
+            self.percentage, self.voltage, self.current, self.temperature,
+            match self.charge_status {
+                BatteryChargeStatus::Charging => "CHG",
+                BatteryChargeStatus::Discharging => "DIS",
+                BatteryChargeStatus::Full => "FULL",
+                BatteryChargeStatus::NotCharging => "NC",
+                BatteryChargeStatus::Unknown => "?",
+            })
+    }
+}
