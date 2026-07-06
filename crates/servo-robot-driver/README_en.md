@@ -2,7 +2,7 @@
 
 English | [简体中文](README.md)
 
-STM32 serial communication driver for bidirectional data transfer between PC and STM32.
+The communication driver between the host computer and ServoRobotBoard is used for bidirectional data transmission between the two through the serial port.
 
 ## Features
 

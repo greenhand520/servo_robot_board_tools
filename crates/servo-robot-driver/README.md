@@ -2,7 +2,7 @@
 
 [English](README_en.md) | 简体中文
 
-STM32 串口通信驱动，用于 PC 与 STM32 之间的双向数据传输。
+上位机通过串口与 ServoRobotBoard 的通信驱动，用于两者之间的双向数据传输。
 
 ## 特性
 

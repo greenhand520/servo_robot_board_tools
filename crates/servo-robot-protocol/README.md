@@ -2,7 +2,7 @@
 
 [English](README_en.md) | 简体中文
 
-STM32 机器人通信协议定义，支持 `no_std` + `alloc`，可用于 PC 和嵌入式平台。
+ServoRobotBoard与上位机通信协议定义，支持 `no_std` + `alloc`，可用于 PC 和嵌入式平台。
 
 ## 特性
 

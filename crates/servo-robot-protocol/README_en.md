@@ -2,7 +2,7 @@
 
 English | [简体中文](README.md)
 
-STM32 Robot Communication Protocol Definition, supports `no_std` + `alloc`, compatible with PC and embedded platforms.
+Definition of communication protocol between ServoRobotBoard and host computer, supports `no_std` + `alloc`, compatible with PC and embedded platforms.
 
 ## Features
 

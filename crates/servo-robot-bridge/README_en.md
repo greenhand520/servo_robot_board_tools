@@ -6,7 +6,24 @@ ROS2 bridge node that publishes servo-robot-driver data as ROS2 topics and expos
 
 ## Quick Start
 
-### 1. Enable ROS2 Bridge
+### 1. Install ROS2 Rust
+
+```bash
+# 1. Install Rust(Optiolal)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 2. Clone ros2_rust
+mkdir -p ~/ros_pkgs/ros2_rust_ws/src
+cd ~/ros_pkgs/ros2_rust_ws/src
+git clone https://github.com/ros2-rust/ros2_rust.git
+vcs import < ros2_rust/ros2_rust_humble.repos
+
+# 3. Build
+cd ~/ros_pkgs/ros2_rust_ws
+colcon build
+```
+
+### 2. Enable ROS2 Bridge
 
 ```bash
 # Default paths
@@ -21,7 +38,7 @@ The script will:
 - Generate `Cargo.toml` and `build.rs` from templates
 - Enable the bridge crate in the workspace
 
-### 2. Set IDE Environment Variables
+### 3. Set IDE Environment Variables
 
 **RustRover / CLion users**: Add variables from `scripts/.env` to Rust environment variables:
 
@@ -32,7 +49,7 @@ The script will:
    - `AMENT_PREFIX_PATH=...` (copy from `scripts/.env`)
    - `LD_LIBRARY_PATH=...` (copy from `scripts/.env`)
 
-### 3. Build and Run
+### 4. Build and Run
 
 ```bash
 # Build (real serial port)
@@ -216,7 +233,7 @@ Dispatch Thread → EventBus.dispatch()            ROS2 Topic Publishing (rosout
 ## Install ROS2 Rust
 
 ```bash
-# 1. Install Rust
+# 1. Install Rust(Optiolal)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # 2. Clone ros2_rust
