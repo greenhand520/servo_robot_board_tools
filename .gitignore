@@ -1,5 +1,16 @@
 /.idea
 /target
+# Bridge 实际文件（从模板生成）
+crates/servo-robot-bridge/Cargo.toml
+crates/servo-robot-bridge/build.rs
+crates/servo-robot-tui/Cargo.toml
+Cargo.toml
+
+# 本地配置
+.cargo
+.env
+
 
 /.claude
+CLAUDE.md
 /.mimocode

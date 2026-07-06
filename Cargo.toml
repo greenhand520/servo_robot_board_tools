@@ -3,8 +3,8 @@ resolver = "2"
 members = [
     "crates/servo-robot-protocol",
     "crates/servo-robot-driver",
-    "crates/servo-robot-bridge",
     "crates/servo-robot-tui",
+    "crates/servo-robot-bridge",
 ]
 
 [workspace.package]
@@ -13,9 +13,16 @@ edition = "2024"
 license = "GPL-3"
 
 [workspace.dependencies]
-# 所有 crate 共用的依赖版本在这统一管理
-robot-driver   = { path = "crates/servo-robot-driver" }
+robot-driver = { path = "crates/servo-robot-driver" }
 serialport = "4.9.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 anyhow = "1.0.103"
+log = "0.4"
+
+[patch.crates-io]
+rosidl_runtime_rs = { path = "/home/eartholnpc/ros_pkgs/ros2_rust_ws/src/ros2-rust/rosidl_runtime_rs/rosidl_runtime_rs" }
+builtin_interfaces = { path = "/home/eartholnpc/ros_pkgs/ros2_rust_ws/install/builtin_interfaces/share/builtin_interfaces/rust" }
+std_msgs = { path = "/home/eartholnpc/ros_pkgs/ros2_rust_ws/install/std_msgs/share/std_msgs/rust" }
+geometry_msgs = { path = "/home/eartholnpc/ros_pkgs/ros2_rust_ws/install/geometry_msgs/share/geometry_msgs/rust" }
+sensor_msgs = { path = "/home/eartholnpc/ros_pkgs/ros2_rust_ws/install/sensor_msgs/share/sensor_msgs/rust" }
