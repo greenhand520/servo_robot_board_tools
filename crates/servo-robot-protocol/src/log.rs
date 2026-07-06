@@ -1,7 +1,6 @@
 //! 日志消息类型
 
 use crate::error::FrameError;
-use crate::enum_from_u8;
 use crate::frame::{FromPayload, ToPayload};
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -11,19 +10,29 @@ use alloc::vec::Vec;
 #[repr(u8)]
 pub enum LogLevel {
     #[default]
-    Unknown = 0,
+    OFF = 0,
     Debug = 1,
     Info = 2,
     Warn = 3,
     Error = 4,
 }
 
-enum_from_u8!(LogLevel, Unknown, Debug=1, Info=2, Warn=3, Error=4);
+impl LogLevel {
+    pub fn from_u8(v: u8) -> Self {
+        match v {
+            0 => LogLevel::OFF,
+            1 => LogLevel::Debug,
+            2 => LogLevel::Info,
+            3 => LogLevel::Warn,
+            _ => Self::OFF,
+        }
+    }
+}
 
 impl core::fmt::Display for LogLevel {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::Unknown => write!(f, "Unknown"),
+            Self::OFF => write!(f, "OFF"),
             Self::Debug => write!(f, "DEBUG"),
             Self::Info => write!(f, "INFO"),
             Self::Warn => write!(f, "WARN"),
