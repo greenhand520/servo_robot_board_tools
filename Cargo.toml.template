@@ -4,7 +4,7 @@ members = [
     "crates/servo-robot-protocol",
     "crates/servo-robot-driver",
     "crates/servo-robot-tui",
-    "crates/servo-robot-bridge",
+    # "crates/servo-robot-bridge",
 ]
 
 [workspace.package]
@@ -14,10 +14,11 @@ license = "GPL-3"
 
 [workspace.dependencies]
 robot-driver = { path = "crates/servo-robot-driver" }
-serialport = "4.9.0"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.150"
-anyhow = "1.0.103"
+serialport = "4.9"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+log = "0.4"
 
 [patch.crates-io]
 rosidl_runtime_rs = { path = "${ROS2_RUST_WS}/src/ros2-rust/rosidl_runtime_rs/rosidl_runtime_rs" }

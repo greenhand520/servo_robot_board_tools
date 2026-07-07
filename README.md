@@ -48,6 +48,9 @@ Rust workspace for communicating with an STM32-based robot power/servo managemen
 ## Quick Start
 
 ```bash
+# Initialize workspace (generates Cargo.toml from template)
+source scripts/init_workspace.sh
+
 # Build all crates
 cargo build
 
@@ -57,6 +60,23 @@ cargo run -p servo-robot-tui
 # Run all tests
 cargo test
 ```
+
+### ROS2 Support
+
+To enable the ROS2 bridge, add `--ros2_support` when initializing:
+
+```bash
+# Enable ROS2 with default paths
+source scripts/init_workspace.sh --ros2_support
+
+# Or specify custom paths
+source scripts/init_workspace.sh --ros2_support ~/ros_pkgs/ros2_rust_ws ~/ros_pkgs/servo_robot_board_ws
+```
+
+This generates:
+- `Cargo.toml` with ROS2 dependency patches
+- `scripts/.env` with ROS2 environment variables (`AMENT_PREFIX_PATH`, `LD_LIBRARY_PATH`, etc.)
+- Bridge and TUI `Cargo.toml` from templates
 
 For more details on each crate, see their respective README:
 
