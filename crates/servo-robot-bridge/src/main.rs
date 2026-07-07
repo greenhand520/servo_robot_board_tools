@@ -4,16 +4,20 @@
 //! version: 0.1.0
 //! # Date
 //! 2026/7/4 10:18
+
 //! ROS2 bridge node
 
 mod conversion;
 mod services;
 
-use rclrs::*;
-use servo_robot_driver::protocol::log::{LogLevel, LogMessage};
-use servo_robot_driver::{Driver, DriverCallback};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+use rclrs::*;
+use servo_robot_board_interface::msg::*;
+use servo_robot_board_interface::srv::*;
+use servo_robot_driver::protocol::log::{LogLevel, LogMessage};
+use servo_robot_driver::{Driver, DriverCallback};
 
 #[cfg(feature = "mock")]
 use servo_robot_driver::MockTransport;
@@ -40,7 +44,7 @@ impl DriverCallback for BridgeCallback {
             h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg
         );
 
-        // 发布到 /robot/board/log
+        // Publish to /robot/board/log
         let ros_level = match log_msg.level {
             LogLevel::Error => rcl_interfaces::msg::Log::ERROR,
             LogLevel::Warn => rcl_interfaces::msg::Log::WARN,
@@ -80,7 +84,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let executor = context.create_basic_executor();
     let node = executor.create_node("servo_robot_board_bridge")?;
 
-    // 声明 ROS2 参数（可通过 --ros-args -p port:=... -p baud_rate:=... 或 YAML 参数文件设置）
+    // Declare ROS2 parameters
+    // can be done via --ros-args -p port:=... -p baud_rate:=... or YAML parameter file settings
     #[cfg(not(feature = "mock"))]
     let param_port: MandatoryParameter<Arc<str>> = node
         .declare_parameter("port")
@@ -139,11 +144,11 @@ fn publish_data(
     state: &servo_robot_driver::DriverState,
     logger: &Logger,
     imu_pub: &Publisher<sensor_msgs::msg::Imu>,
-    power_pub: &Publisher<servo_robot_board_interface::msg::BoardPower>,
-    thermal_pub: &Publisher<servo_robot_board_interface::msg::BoardThermal>,
-    system_pub: &Publisher<servo_robot_board_interface::msg::BoardSystem>,
-    event_pub: &Publisher<servo_robot_board_interface::msg::BoardEvent>,
-    config_pub: &Publisher<servo_robot_board_interface::msg::BoardConfig>,
+    power_pub: &Publisher<BoardPower>,
+    thermal_pub: &Publisher<BoardThermal>,
+    system_pub: &Publisher<BoardSystem>,
+    event_pub: &Publisher<BoardEvent>,
+    config_pub: &Publisher<BoardConfig>,
     battery_pub: &Publisher<sensor_msgs::msg::BatteryState>,
 ) {
     let snap = state.snapshot();
@@ -216,19 +221,18 @@ fn run_bridge(
     let driver = Arc::new(Mutex::new(driver));
     let logger = node.logger().clone();
 
-    // 创建发布者
     let imu_pub = node.create_publisher::<sensor_msgs::msg::Imu>("/robot/board/imu")?;
     let power_pub = node
-        .create_publisher::<servo_robot_board_interface::msg::BoardPower>("/robot/board/power")?;
-    let thermal_pub = node.create_publisher::<servo_robot_board_interface::msg::BoardThermal>(
+        .create_publisher::<BoardPower>("/robot/board/power")?;
+    let thermal_pub = node.create_publisher::<BoardThermal>(
         "/robot/board/thermal",
     )?;
     let system_pub = node
-        .create_publisher::<servo_robot_board_interface::msg::BoardSystem>("/robot/board/system")?;
+        .create_publisher::<BoardSystem>("/robot/board/system")?;
     let event_pub = node
-        .create_publisher::<servo_robot_board_interface::msg::BoardEvent>("/robot/board/event")?;
+        .create_publisher::<BoardEvent>("/robot/board/event")?;
     let config_pub = node
-        .create_publisher::<servo_robot_board_interface::msg::BoardConfig>("/robot/board/config")?;
+        .create_publisher::<BoardConfig>("/robot/board/config")?;
     let battery_pub =
         node.create_publisher::<sensor_msgs::msg::BatteryState>("/robot/board/battery")?;
 
@@ -236,9 +240,9 @@ fn run_bridge(
 
     let driver_clone = driver.clone();
     let logger_clone = logger.clone();
-    let _query_srv = node.create_service::<servo_robot_board_interface::srv::BoardQueryConfig, _>(
+    let _query_srv = node.create_service::<BoardQueryConfig, _>(
         "/robot/board/query_config",
-        move |req: servo_robot_board_interface::srv::BoardQueryConfig_Request| {
+        move |req: BoardQueryConfig_Request| {
             log_info!(
                 &logger_clone,
                 "Service query_config: type=0x{:02X}",
@@ -261,9 +265,9 @@ fn run_bridge(
     let driver_clone = driver.clone();
     let logger_clone = logger.clone();
     let _query_all_srv = node
-        .create_service::<servo_robot_board_interface::srv::BoardQueryAllConfig, _>(
+        .create_service::<BoardQueryAllConfig, _>(
             "/robot/board/query_all_config",
-            move |_req: servo_robot_board_interface::srv::BoardQueryAllConfig_Request| {
+            move |_req: BoardQueryAllConfig_Request| {
                 log_info!(&logger_clone, "Service query_all_config");
                 let resp = services::handle_query_all_config(&driver_clone);
                 if resp.success {
@@ -281,9 +285,9 @@ fn run_bridge(
 
     let driver_clone = driver.clone();
     let logger_clone = logger.clone();
-    let _write_srv = node.create_service::<servo_robot_board_interface::srv::BoardWriteConfig, _>(
+    let _write_srv = node.create_service::<BoardWriteConfig, _>(
         "/robot/board/write_config",
-        move |req: servo_robot_board_interface::srv::BoardWriteConfig_Request| {
+        move |req: BoardWriteConfig_Request| {
             log_info!(
                 &logger_clone,
                 "Service write_config: type=0x{:02X}, value={:.2}",
@@ -302,9 +306,9 @@ fn run_bridge(
 
     let driver_clone = driver.clone();
     let logger_clone = logger.clone();
-    let _switch_srv = node.create_service::<servo_robot_board_interface::srv::BoardSwitch, _>(
+    let _switch_srv = node.create_service::<BoardSwitch, _>(
         "/robot/board/switch",
-        move |req: servo_robot_board_interface::srv::BoardSwitch_Request| {
+        move |req: BoardSwitch_Request| {
             log_info!(
                 &logger_clone,
                 "Service switch: type=0x{:02X}, enable={}",

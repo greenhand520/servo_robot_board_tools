@@ -4,7 +4,7 @@
 //! version: 0.1.0
 //! # Date
 //! 2026/7/4 10:30
-//! ROS2 bridge node
+
 //!Data type conversion, include:
 //! protocol::ImuData -> sensors_msg::Imu
 //! protocol::BatteryState -> sensors_msg::BatteryState

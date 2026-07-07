@@ -1,7 +1,7 @@
 use std::env;
 use std::path::Path;
 
-/// 回退路径（当 AMENT_PREFIX_PATH 不完整时使用）
+/// Rollback path (used when AMENT_PREFIX_PATH is incomplete)
 const FALLBACK_PATHS: &[&str] = &[
     "/opt/ros/humble",
     "${ROS2_RUST_WS}/install/builtin_interfaces",
@@ -16,7 +16,7 @@ const FALLBACK_PATHS: &[&str] = &[
 fn main() {
     let mut found_paths = Vec::new();
 
-    // 从 AMENT_PREFIX_PATH 动态添加链接搜索路径
+    // Dynamically add link search paths from AMENT_PREFIX_PATH
     match env::var("AMENT_PREFIX_PATH") {
         Ok(ament_paths) => {
             for path in ament_paths.split(':') {
@@ -33,7 +33,7 @@ fn main() {
         }
     }
 
-    // 回退：如果 AMENT_PREFIX_PATH 只有 /opt/ros/humble，补充其他路径
+    // Rollback: If AMENT_PREFIX_PATH only has /opt/ros/humble, add other paths
     let needs_fallback = found_paths.len() <= 1
         || !found_paths.iter().any(|p| p.contains("ros2_rust_ws"));
 
@@ -47,7 +47,7 @@ fn main() {
         }
     }
 
-    // 通知 Cargo 在环境变量变化时重新运行
+    // Notify Cargo to restart when environment variables change
     println!("cargo:rerun-if-env-changed=AMENT_PREFIX_PATH");
     println!("cargo:rerun-if-env-changed=LD_LIBRARY_PATH");
 }

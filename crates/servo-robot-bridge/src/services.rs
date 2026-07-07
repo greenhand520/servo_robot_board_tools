@@ -4,12 +4,14 @@
 //! version: 0.1.0
 //! # Date
 //! 2026/7/4 10:30
+//!
 //! ROS2 service processing
+
+use std::sync::{Arc, Mutex};
 
 use servo_robot_board_interface::srv::*;
 use servo_robot_driver::Driver;
 use servo_robot_driver::protocol::config::{Config, ConfigType};
-use std::sync::{Arc, Mutex};
 
 pub fn handle_query_config(
     driver: &Arc<Mutex<Driver>>,

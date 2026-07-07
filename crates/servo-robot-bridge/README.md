@@ -21,9 +21,22 @@ vcs import < ros2_rust/ros2_rust_humble.repos
 # 3. 构建
 cd ~/ros_pkgs/ros2_rust_ws
 colcon build
+# 或者 colcon build --cmake-args -Wno-dev  
 ```
 
-### 2. 启用 ROS2 Bridge
+### 2. 安装 Servo Robot Board Interface
+
+```bash
+mkdir -p ~/ros_pkgs/servo_robot_board_ws/src
+cd ~/ros_pkgs/servo_robot_board_ws/src
+git clone https://github.com/greenhand520/servo_robot_board_interface.git
+
+cd ~/ros_pkgs/servo_robot_board_ws/
+colcon build
+# 或者 colcon build --cmake-args -Wno-dev  
+```
+
+### 3. 启用 ROS2 Bridge
 
 ```bash
 # 使用默认路径
@@ -38,7 +51,7 @@ source scripts/init_workspace.sh --ros2_support ~/ros_pkgs/ros2_rust_ws ~/ros_pk
 - 从模板生成 `Cargo.toml` 和 `build.rs`
 - 启用 workspace 中的 bridge crate
 
-### 3. 设置 IDE 环境变量
+### 4. 设置 IDE 环境变量（可选）
 
 **RustRover / CLion 用户**：需要将 `scripts/.env` 中的变量添加到 Rust 环境变量：
 
@@ -49,7 +62,7 @@ source scripts/init_workspace.sh --ros2_support ~/ros_pkgs/ros2_rust_ws ~/ros_pk
    - `AMENT_PREFIX_PATH=...`（从 `scripts/.env` 复制）
    - `LD_LIBRARY_PATH=...`（从 `scripts/.env` 复制）
 
-### 4. 构建和运行
+### 5. 构建和运行
 
 ```bash
 # 构建（连接真实串口）
@@ -74,7 +87,7 @@ ros2 launch crates/servo-robot-bridge/launch/bridge.launch.py
 ros2 launch crates/servo-robot-bridge/launch/bridge.launch.py port:=/dev/ttyUSB1 baud_rate:=921600
 ```
 
-> **Mock 模式**：启用 `mock` feature 后，驱动使用 `MockTransport` 模拟 STM32 数据（IMU 100Hz、Battery 10Hz 等），无需连接硬件即可开发和测试 ROS2 话题/服务。
+> **Mock 模式**：启用 `mock` feature 后，驱动使用 `MockTransport` 模拟 STM32 数据（IMU、Battery 等），无需连接硬件即可开发和测试 ROS2 话题/服务。
 
 ## 参数
 

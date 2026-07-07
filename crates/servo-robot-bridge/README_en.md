@@ -21,6 +21,19 @@ vcs import < ros2_rust/ros2_rust_humble.repos
 # 3. Build
 cd ~/ros_pkgs/ros2_rust_ws
 colcon build
+# or colcon build --cmake-args -Wno-dev  
+```
+
+### 2. 安装 Servo Robot Board Interface
+
+```bash
+mkdir -p ~/ros_pkgs/servo_robot_board_ws/src
+cd ~/ros_pkgs/servo_robot_board_ws/src
+git clone https://github.com/greenhand520/servo_robot_board_interface.git
+
+cd ~/ros_pkgs/servo_robot_board_ws/
+colcon build
+# or colcon build --cmake-args -Wno-dev  
 ```
 
 ### 2. Enable ROS2 Bridge
@@ -38,7 +51,7 @@ The script will:
 - Generate `Cargo.toml` and `build.rs` from templates
 - Enable the bridge crate in the workspace
 
-### 3. Set IDE Environment Variables
+### 3. Set IDE Environment Variables (Optional)
 
 **RustRover / CLion users**: Add variables from `scripts/.env` to Rust environment variables:
 
