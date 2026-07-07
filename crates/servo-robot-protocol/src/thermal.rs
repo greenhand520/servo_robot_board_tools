@@ -1,4 +1,10 @@
-//! 温度数据类型
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/3 11:39
+//! Temperature data
 
 use crate::error::FrameError;
 use crate::frame::{FromPayload, ToPayload};
@@ -18,16 +24,61 @@ pub struct ThermalData {
 impl ThermalData {
     pub fn from_bytes(data: &[u8]) -> Result<Self, FrameError> {
         if data.len() < 24 {
-            return Err(FrameError::PayloadTooShort { expected: 24, got: data.len() });
+            return Err(FrameError::PayloadTooShort {
+                expected: 24,
+                got: data.len(),
+            });
         }
         let mut offset = 0;
-        let temp_servo_power = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]); offset += 4;
-        let temp_5v_power = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]); offset += 4;
-        let temp_mcu = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]); offset += 4;
-        let temp_charge = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]); offset += 4;
-        let temp_battery = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]); offset += 4;
-        let reserved = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
-        Ok(ThermalData { temp_servo_power, temp_5v_power, temp_mcu, temp_charge, temp_battery, reserved })
+        let temp_servo_power = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        offset += 4;
+        let temp_5v_power = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        offset += 4;
+        let temp_mcu = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        offset += 4;
+        let temp_charge = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        offset += 4;
+        let temp_battery = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        offset += 4;
+        let reserved = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        Ok(ThermalData {
+            temp_servo_power,
+            temp_5v_power,
+            temp_mcu,
+            temp_charge,
+            temp_battery,
+            reserved,
+        })
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -42,13 +93,27 @@ impl ThermalData {
     }
 }
 
-impl ToPayload for ThermalData { fn to_payload(&self) -> Vec<u8> { self.to_bytes() } }
-impl FromPayload for ThermalData { fn from_payload(p: &[u8]) -> Result<Self, FrameError> { Self::from_bytes(p) } }
+impl ToPayload for ThermalData {
+    fn to_payload(&self) -> Vec<u8> {
+        self.to_bytes()
+    }
+}
+impl FromPayload for ThermalData {
+    fn from_payload(p: &[u8]) -> Result<Self, FrameError> {
+        Self::from_bytes(p)
+    }
+}
 
 impl core::fmt::Display for ThermalData {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "servo={:.1} 5v={:.1} mcu={:.1} charge={:.1} bat={:.1}°C",
-            self.temp_servo_power, self.temp_5v_power, self.temp_mcu,
-            self.temp_charge, self.temp_battery)
+        write!(
+            f,
+            "servo={:.1} 5v={:.1} mcu={:.1} charge={:.1} bat={:.1}°C",
+            self.temp_servo_power,
+            self.temp_5v_power,
+            self.temp_mcu,
+            self.temp_charge,
+            self.temp_battery
+        )
     }
 }

@@ -1,4 +1,10 @@
-//! 日志消息类型
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/5 09:40
+//! Log message
 
 use crate::error::FrameError;
 use crate::frame::{FromPayload, ToPayload};
@@ -56,14 +62,22 @@ pub struct LogMessage {
 impl LogMessage {
     pub fn from_bytes(data: &[u8]) -> Result<Self, FrameError> {
         if data.is_empty() {
-            return Err(FrameError::PayloadTooShort { expected: 1, got: 0 });
+            return Err(FrameError::PayloadTooShort {
+                expected: 1,
+                got: 0,
+            });
         }
 
         let level = LogLevel::from_u8(data[0]);
         let rest = &data[1..];
 
         // 查找第一个 null 分隔 file_name
-        let file_end = rest.iter().position(|&b| b == 0).ok_or(FrameError::PayloadDecode("missing null terminator for file_name"))?;
+        let file_end = rest
+            .iter()
+            .position(|&b| b == 0)
+            .ok_or(FrameError::PayloadDecode(
+                "missing null terminator for file_name",
+            ))?;
         let file_name = core::str::from_utf8(&rest[..file_end])
             .map_err(|_| FrameError::PayloadDecode("invalid utf8 in file_name"))?
             .to_string();
@@ -71,7 +85,12 @@ impl LogMessage {
         let rest = &rest[file_end + 1..];
 
         // 查找第二个 null 分隔 fun_name
-        let fun_end = rest.iter().position(|&b| b == 0).ok_or(FrameError::PayloadDecode("missing null terminator for fun_name"))?;
+        let fun_end = rest
+            .iter()
+            .position(|&b| b == 0)
+            .ok_or(FrameError::PayloadDecode(
+                "missing null terminator for fun_name",
+            ))?;
         let fun_name = core::str::from_utf8(&rest[..fun_end])
             .map_err(|_| FrameError::PayloadDecode("invalid utf8 in fun_name"))?
             .to_string();
@@ -82,7 +101,12 @@ impl LogMessage {
             .map_err(|_| FrameError::PayloadDecode("invalid utf8 in msg"))?
             .to_string();
 
-        Ok(LogMessage { level, file_name, fun_name, msg })
+        Ok(LogMessage {
+            level,
+            file_name,
+            fun_name,
+            msg,
+        })
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -119,7 +143,11 @@ impl FromPayload for LogMessage {
 
 impl core::fmt::Display for LogMessage {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "[{}] {}::{}: {}", self.level, self.file_name, self.fun_name, self.msg)
+        write!(
+            f,
+            "[{}] {}::{}: {}",
+            self.level, self.file_name, self.fun_name, self.msg
+        )
     }
 }
 

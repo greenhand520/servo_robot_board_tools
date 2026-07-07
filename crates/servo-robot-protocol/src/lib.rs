@@ -1,22 +1,22 @@
-//! servo-robot-protocol - STM32 通信协议定义
+//! servo-robot-protocol - STM32 Definition of communication protocols
 //!
-//! 支持 no_std + alloc，可用于 PC 和嵌入式平台。
+//! Supports no_std + alloc, available for PC and embedded platforms.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
 
+pub mod battery_state;
+pub mod config;
 pub mod crc;
 pub mod error;
-pub mod frame;
 pub mod event;
-pub mod config;
-pub mod system;
-pub mod power;
-pub mod battery_state;
+pub mod frame;
 pub mod imu;
-pub mod thermal;
 pub mod log;
+pub mod power;
+pub mod system;
+pub mod thermal;
 
 /// 通用枚举转换宏
 #[macro_export]

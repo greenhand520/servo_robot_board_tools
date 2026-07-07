@@ -1,9 +1,15 @@
-//! 配置类型
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/3 11:30
+//! Board Config
 
 use crate::error::FrameError;
 use crate::frame::{FromPayload, ToPayload};
-use alloc::vec::Vec;
 use crate::log::LogLevel;
+use alloc::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -48,7 +54,6 @@ impl ConfigType {
         }
     }
 
-
     pub fn name(&self) -> &'static str {
         match self {
             Self::Reset => "Reset",
@@ -83,13 +88,13 @@ impl ConfigType {
     }
 }
 
-/// 配置值
+/// Configuration values
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Config {
     Reset,
     Shutdown,
-    SwitchServoPower(bool),
-    Switch5VPower(bool),
+    SwitchPowerServo(bool),
+    SwitchPower5V(bool),
     SwitchCharge(bool),
     SwitchBatExtOut(bool),
     PowerServoCurrentLimit(f32),
@@ -113,8 +118,8 @@ impl Config {
         match self {
             Self::Reset => ConfigType::Reset,
             Self::Shutdown => ConfigType::Shutdown,
-            Self::SwitchServoPower(_) => ConfigType::SwitchServoPower,
-            Self::Switch5VPower(_) => ConfigType::Switch5VPower,
+            Self::SwitchPowerServo(_) => ConfigType::SwitchServoPower,
+            Self::SwitchPower5V(_) => ConfigType::Switch5VPower,
             Self::SwitchCharge(_) => ConfigType::SwitchCharge,
             Self::SwitchBatExtOut(_) => ConfigType::SwitchBatExtOut,
             Self::PowerServoCurrentLimit(_) => ConfigType::PowerServoCurrentLimit,
@@ -132,8 +137,8 @@ impl Config {
     pub fn value(&self) -> f32 {
         match self {
             Self::Reset | Self::Shutdown => 0.0,
-            Self::SwitchServoPower(on)
-            | Self::Switch5VPower(on)
+            Self::SwitchPowerServo(on)
+            | Self::SwitchPower5V(on)
             | Self::SwitchCharge(on)
             | Self::SwitchBatExtOut(on) => {
                 if *on {
@@ -158,8 +163,8 @@ impl Config {
         match typ {
             ConfigType::Reset => Self::Reset,
             ConfigType::Shutdown => Self::Shutdown,
-            ConfigType::SwitchServoPower => Self::SwitchServoPower(value != 0.0),
-            ConfigType::Switch5VPower => Self::Switch5VPower(value != 0.0),
+            ConfigType::SwitchServoPower => Self::SwitchPowerServo(value != 0.0),
+            ConfigType::Switch5VPower => Self::SwitchPower5V(value != 0.0),
             ConfigType::SwitchCharge => Self::SwitchCharge(value != 0.0),
             ConfigType::SwitchBatExtOut => Self::SwitchBatExtOut(value != 0.0),
             ConfigType::PowerServoCurrentLimit => Self::PowerServoCurrentLimit(value),
@@ -171,7 +176,6 @@ impl Config {
             ConfigType::ChargeStopVoltage => Self::ChargeStopVoltage(value),
             ConfigType::ChargeStopSoc => Self::ChargeStopSoc(value),
             ConfigType::TxLogLevel => Self::TxLogLevel(LogLevel::from_u8(value as _)),
-
         }
     }
 
@@ -202,8 +206,8 @@ impl Config {
         buf.push(self.config_type() as u8);
         match self {
             Self::Reset | Self::Shutdown => {}
-            Self::SwitchServoPower(on)
-            | Self::Switch5VPower(on)
+            Self::SwitchPowerServo(on)
+            | Self::SwitchPower5V(on)
             | Self::SwitchCharge(on)
             | Self::SwitchBatExtOut(on) => buf.push(*on as u8),
             _ => buf.extend_from_slice(&self.value().to_le_bytes()),
@@ -223,7 +227,7 @@ impl FromPayload for Config {
     }
 }
 
-/// 板级配置快照
+/// Snapshot of board-level configuration
 #[derive(Debug, Clone)]
 pub struct BoardConfigSnapshot {
     pub servo_current_limit: f32,
@@ -234,10 +238,8 @@ pub struct BoardConfigSnapshot {
     pub charge_temp_limit: f32,
     pub charge_stop_voltage: f32,
     pub charge_stop_percentage: f32,
-    pub pd_negotiated_mv: u16,
-    pub pd_negotiated_ma: u16,
     pub charge_enable: bool,
-    pub servo_power_on: bool,
+    pub power_servo_on: bool,
     pub power_5v_on: bool,
     pub charge_on: bool,
     pub bat_ext_out_on: bool,
@@ -255,10 +257,8 @@ impl Default for BoardConfigSnapshot {
             charge_temp_limit: 70.0,
             charge_stop_voltage: 16.8,
             charge_stop_percentage: 1.0,
-            pd_negotiated_mv: 20000,
-            pd_negotiated_ma: 5000,
             charge_enable: true,
-            servo_power_on: true,
+            power_servo_on: true,
             power_5v_on: true,
             charge_on: true,
             bat_ext_out_on: true,
@@ -269,9 +269,9 @@ impl Default for BoardConfigSnapshot {
 
 impl BoardConfigSnapshot {
     pub fn from_bytes(data: &[u8]) -> Result<Self, FrameError> {
-        if data.len() < 42 {
+        if data.len() < 38 {
             return Err(FrameError::PayloadTooShort {
-                expected: 42,
+                expected: 38,
                 got: data.len(),
             });
         }
@@ -298,13 +298,9 @@ impl BoardConfigSnapshot {
         let charge_stop_percentage =
             f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
         o += 4;
-        let pd_negotiated_mv = u16::from_le_bytes([data[o], data[o + 1]]);
-        o += 2;
-        let pd_negotiated_ma = u16::from_le_bytes([data[o], data[o + 1]]);
-        o += 2;
         let charge_enable = data[o] != 0;
         o += 1;
-        let servo_power_on = data[o] != 0;
+        let power_servo_on = data[o] != 0;
         o += 1;
         let power_5v_on = data[o] != 0;
         o += 1;
@@ -322,10 +318,8 @@ impl BoardConfigSnapshot {
             charge_temp_limit,
             charge_stop_voltage,
             charge_stop_percentage,
-            pd_negotiated_mv,
-            pd_negotiated_ma,
             charge_enable,
-            servo_power_on,
+            power_servo_on,
             power_5v_on,
             charge_on,
             bat_ext_out_on,
@@ -334,7 +328,7 @@ impl BoardConfigSnapshot {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(42);
+        let mut buf = Vec::with_capacity(38);
         buf.extend_from_slice(&self.servo_current_limit.to_le_bytes());
         buf.extend_from_slice(&self.servo_temp_limit.to_le_bytes());
         buf.extend_from_slice(&self.temp_5v_limit.to_le_bytes());
@@ -343,10 +337,8 @@ impl BoardConfigSnapshot {
         buf.extend_from_slice(&self.charge_temp_limit.to_le_bytes());
         buf.extend_from_slice(&self.charge_stop_voltage.to_le_bytes());
         buf.extend_from_slice(&self.charge_stop_percentage.to_le_bytes());
-        buf.extend_from_slice(&self.pd_negotiated_mv.to_le_bytes());
-        buf.extend_from_slice(&self.pd_negotiated_ma.to_le_bytes());
         buf.push(self.charge_enable as u8);
-        buf.push(self.servo_power_on as u8);
+        buf.push(self.power_servo_on as u8);
         buf.push(self.power_5v_on as u8);
         buf.push(self.charge_on as u8);
         buf.push(self.bat_ext_out_on as u8);
@@ -368,17 +360,23 @@ impl FromPayload for BoardConfigSnapshot {
 
 impl core::fmt::Display for BoardConfigSnapshot {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "servo={:.1}A/{:.1}°C 5v={:.1}°C chg={:.1}A/{:.1}-{:.1}°C/{:.1}V/{:.0}% pd={}V/{}mA sw=[{},{},{},{},{}] log={}",
-            self.servo_current_limit, self.servo_temp_limit,
+        write!(
+            f,
+            "servo={:.1}A/{:.1}°C 5v={:.1}°C chg={:.1}A/{:.1}-{:.1}°C/{:.1}V/{:.0}% sw=[{},{},{},{},{}] lvl={}",
+            self.servo_current_limit,
+            self.servo_temp_limit,
             self.temp_5v_limit,
-            self.charge_max_current, self.charge_temp_derating, self.charge_temp_limit,
-            self.charge_stop_voltage, self.charge_stop_percentage * 100.0,
-            self.pd_negotiated_mv, self.pd_negotiated_ma,
-            if self.servo_power_on { "S" } else { "-" },
+            self.charge_max_current,
+            self.charge_temp_derating,
+            self.charge_temp_limit,
+            self.charge_stop_voltage,
+            self.charge_stop_percentage * 100.0,
+            if self.power_servo_on { "S" } else { "-" },
             if self.power_5v_on { "5" } else { "-" },
             if self.charge_on { "C" } else { "-" },
             if self.bat_ext_out_on { "B" } else { "-" },
             if self.charge_enable { "E" } else { "-" },
-            self.tx_log_level as u8)
+            self.tx_log_level as u8
+        )
     }
 }

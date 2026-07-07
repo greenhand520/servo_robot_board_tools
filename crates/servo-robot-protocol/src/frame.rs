@@ -1,4 +1,10 @@
-//! 帧格式定义
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/3 11:55
+//! Frame format definition
 
 use crate::error::FrameError;
 use alloc::vec::Vec;

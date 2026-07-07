@@ -1,4 +1,9 @@
-//! IMU 数据类型
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/3 11:31
 
 use crate::error::FrameError;
 use crate::frame::{FromPayload, ToPayload};
@@ -28,35 +33,84 @@ impl ImuData {
         let mut offset = 0;
         let mut accel = [0.0f32; 3];
         for a in &mut accel {
-            *a = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
+            *a = f32::from_le_bytes([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]);
             offset += 4;
         }
         let mut gyro = [0.0f32; 3];
         for g in &mut gyro {
-            *g = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
+            *g = f32::from_le_bytes([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]);
             offset += 4;
         }
         let mut quaternion = [0.0f32; 4];
         for q in &mut quaternion {
-            *q = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
+            *q = f32::from_le_bytes([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]);
             offset += 4;
         }
-        let timestamp_ms = u32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
+        let timestamp_ms = u32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
         offset += 4;
-        let roll = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
+        let roll = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
         offset += 4;
-        let pitch = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
+        let pitch = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
         offset += 4;
-        let yaw = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
+        let yaw = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
 
-        Ok(ImuData { accel, gyro, quaternion, timestamp_ms, roll, pitch, yaw })
+        Ok(ImuData {
+            accel,
+            gyro,
+            quaternion,
+            timestamp_ms,
+            roll,
+            pitch,
+            yaw,
+        })
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(56);
-        for a in &self.accel { buf.extend_from_slice(&a.to_le_bytes()); }
-        for g in &self.gyro { buf.extend_from_slice(&g.to_le_bytes()); }
-        for q in &self.quaternion { buf.extend_from_slice(&q.to_le_bytes()); }
+        for a in &self.accel {
+            buf.extend_from_slice(&a.to_le_bytes());
+        }
+        for g in &self.gyro {
+            buf.extend_from_slice(&g.to_le_bytes());
+        }
+        for q in &self.quaternion {
+            buf.extend_from_slice(&q.to_le_bytes());
+        }
         buf.extend_from_slice(&self.timestamp_ms.to_le_bytes());
         buf.extend_from_slice(&self.roll.to_le_bytes());
         buf.extend_from_slice(&self.pitch.to_le_bytes());
@@ -66,19 +120,32 @@ impl ImuData {
 }
 
 impl ToPayload for ImuData {
-    fn to_payload(&self) -> Vec<u8> { self.to_bytes() }
+    fn to_payload(&self) -> Vec<u8> {
+        self.to_bytes()
+    }
 }
 
 impl FromPayload for ImuData {
-    fn from_payload(payload: &[u8]) -> Result<Self, FrameError> { Self::from_bytes(payload) }
+    fn from_payload(payload: &[u8]) -> Result<Self, FrameError> {
+        Self::from_bytes(payload)
+    }
 }
 
 impl core::fmt::Display for ImuData {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "r={:.1} p={:.1} y={:.1} a=[{:.2},{:.2},{:.2}] g=[{:.2},{:.2},{:.2}]",
-            self.roll, self.pitch, self.yaw,
-            self.accel[0], self.accel[1], self.accel[2],
-            self.gyro[0], self.gyro[1], self.gyro[2])
+        write!(
+            f,
+            "r={:.1} p={:.1} y={:.1} a=[{:.2},{:.2},{:.2}] g=[{:.2},{:.2},{:.2}]",
+            self.roll,
+            self.pitch,
+            self.yaw,
+            self.accel[0],
+            self.accel[1],
+            self.accel[2],
+            self.gyro[0],
+            self.gyro[1],
+            self.gyro[2]
+        )
     }
 }
 

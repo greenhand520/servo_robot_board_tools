@@ -1,4 +1,9 @@
-//! 电源数据类型
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/3 11:35
 
 use crate::error::FrameError;
 use crate::frame::{FromPayload, ToPayload};
@@ -18,16 +23,61 @@ pub struct PowerData {
 impl PowerData {
     pub fn from_bytes(data: &[u8]) -> Result<Self, FrameError> {
         if data.len() < 24 {
-            return Err(FrameError::PayloadTooShort { expected: 24, got: data.len() });
+            return Err(FrameError::PayloadTooShort {
+                expected: 24,
+                got: data.len(),
+            });
         }
         let mut offset = 0;
-        let servo_voltage = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]); offset += 4;
-        let servo_current = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]); offset += 4;
-        let charge_in_voltage = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]); offset += 4;
-        let charge_in_current = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]); offset += 4;
-        let bat_voltage = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]); offset += 4;
-        let bat_current = f32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
-        Ok(PowerData { servo_voltage, servo_current, charge_in_voltage, charge_in_current, bat_voltage, bat_current })
+        let servo_voltage = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        offset += 4;
+        let servo_current = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        offset += 4;
+        let charge_in_voltage = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        offset += 4;
+        let charge_in_current = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        offset += 4;
+        let bat_voltage = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        offset += 4;
+        let bat_current = f32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        Ok(PowerData {
+            servo_voltage,
+            servo_current,
+            charge_in_voltage,
+            charge_in_current,
+            bat_voltage,
+            bat_current,
+        })
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -42,14 +92,28 @@ impl PowerData {
     }
 }
 
-impl ToPayload for PowerData { fn to_payload(&self) -> Vec<u8> { self.to_bytes() } }
-impl FromPayload for PowerData { fn from_payload(p: &[u8]) -> Result<Self, FrameError> { Self::from_bytes(p) } }
+impl ToPayload for PowerData {
+    fn to_payload(&self) -> Vec<u8> {
+        self.to_bytes()
+    }
+}
+impl FromPayload for PowerData {
+    fn from_payload(p: &[u8]) -> Result<Self, FrameError> {
+        Self::from_bytes(p)
+    }
+}
 
 impl core::fmt::Display for PowerData {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "servo={:.1}V/{:.1}A pd_in={:.1}V/{:.1}A bat={:.1}V/{:.1}A",
-            self.servo_voltage, self.servo_current,
-            self.charge_in_voltage, self.charge_in_current,
-            self.bat_voltage, self.bat_current)
+        write!(
+            f,
+            "servo={:.1}V/{:.1}A pd_in={:.1}V/{:.1}A bat={:.1}V/{:.1}A",
+            self.servo_voltage,
+            self.servo_current,
+            self.charge_in_voltage,
+            self.charge_in_current,
+            self.bat_voltage,
+            self.bat_current
+        )
     }
 }

@@ -1,4 +1,9 @@
-//! 电池状态类型
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/3 11:30
 
 use crate::error::FrameError;
 use crate::frame::{FromPayload, ToPayload};
@@ -79,9 +84,9 @@ impl BatteryTechnology {
 pub struct BatteryState {
     pub voltage: f32,
     pub current: f32,
-    pub soc: f32,
     pub capacity: f32,
     pub design_capacity: f32,
+    // 0～1
     pub percentage: f32,
     pub temperature: f32,
     pub charge_status: BatteryChargeStatus,
@@ -95,9 +100,9 @@ pub struct BatteryState {
 
 impl BatteryState {
     pub fn from_bytes(data: &[u8]) -> Result<Self, FrameError> {
-        if data.len() < 36 {
+        if data.len() < 28 {
             return Err(FrameError::PayloadTooShort {
-                expected: 36,
+                expected: 28,
                 got: data.len(),
             });
         }
@@ -105,8 +110,6 @@ impl BatteryState {
         let voltage = f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
         o += 4;
         let current = f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
-        o += 4;
-        let soc = f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
         o += 4;
         let capacity = f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
         o += 4;
@@ -151,7 +154,6 @@ impl BatteryState {
         Ok(BatteryState {
             voltage,
             current,
-            soc,
             capacity,
             design_capacity,
             percentage,
@@ -168,10 +170,9 @@ impl BatteryState {
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let cell_count = self.cell_voltages.len();
-        let mut buf = Vec::with_capacity(36 + cell_count * 8);
+        let mut buf = Vec::with_capacity(32 + cell_count * 8);
         buf.extend_from_slice(&self.voltage.to_le_bytes());
         buf.extend_from_slice(&self.current.to_le_bytes());
-        buf.extend_from_slice(&self.soc.to_le_bytes());
         buf.extend_from_slice(&self.capacity.to_le_bytes());
         buf.extend_from_slice(&self.design_capacity.to_le_bytes());
         buf.extend_from_slice(&self.percentage.to_le_bytes());
@@ -202,14 +203,20 @@ impl FromPayload for BatteryState {
 
 impl core::fmt::Display for BatteryState {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{:.1}% {:.1}V {:.1}A {:.1}°C {}",
-            self.percentage, self.voltage, self.current, self.temperature,
+        write!(
+            f,
+            "{:.1}% {:.1}V {:.1}A {:.1}°C {}",
+            self.percentage,
+            self.voltage,
+            self.current,
+            self.temperature,
             match self.charge_status {
                 BatteryChargeStatus::Charging => "CHG",
                 BatteryChargeStatus::Discharging => "DIS",
                 BatteryChargeStatus::Full => "FULL",
                 BatteryChargeStatus::NotCharging => "NC",
                 BatteryChargeStatus::Unknown => "?",
-            })
+            }
+        )
     }
 }
