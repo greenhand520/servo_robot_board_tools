@@ -27,10 +27,10 @@ colcon build
 
 ```bash
 # Default paths
-source scripts/enable-ros2-bridge.sh
+source scripts/init_workspace.sh --ros2_support
 
 # Custom paths
-source scripts/enable-ros2-bridge.sh ~/ros_pkgs/ros2_rust_ws ~/ros_pkgs/servo_robot_board_ws
+source scripts/init_workspace.sh --ros2_support ~/ros_pkgs/ros2_rust_ws ~/ros_pkgs/servo_robot_board_ws
 ```
 
 The script will:
@@ -128,10 +128,11 @@ ros2 param get servo_robot_board_bridge baud_rate
 | `/robot/board/imu` | `sensor_msgs/Imu` | IMU data (quaternion, angular velocity, acceleration) |
 | `/robot/board/power` | `BoardPower` | Power data (servo/charge/battery voltage & current) |
 | `/robot/board/thermal` | `BoardThermal` | Temperature data (servo/5V/MCU/charge/battery) |
-| `/robot/board/system` | `BoardSystem` | System info (device ID, uptime, error counts, PD voltage/current) |
-| `/robot/board/event` | `BoardEvent` | Events (charge state, fan, protection flags, error flags) |
+| `/robot/board/system` | `BoardSystem` | System info (device ID, uptime, error counts, PD voltage/current, firmware version) |
+| `/robot/board/event` | `BoardEvent` | Events (charge state, state change flags, protection flags, error flags) |
 | `/robot/board/config` | `BoardConfig` | Config snapshot (all config params + switch states + log level) |
-| `/robot/board/battery` | `sensor_msgs/BatteryState` | Battery state (voltage, current, SOC, cell voltage & temperature) |
+| `/robot/board/battery` | `sensor_msgs/BatteryState` | Battery state (voltage, current, percentage, cell voltage & temperature) |
+| `/robot/board/log` | `rcl_interfaces/Log` | Board logs (timestamp, level, file name, function name, message) |
 
 ### Services
 
@@ -160,25 +161,33 @@ ros2 service call /robot/board/query_all_config servo_robot_board_interface/srv/
 
 ## Logging
 
-Board logs are forwarded to the ROS2 logging system (`rosout`) via `DriverCallback::on_log`, using rclrs logging macros.
+Board logs are forwarded to two destinations via `DriverCallback::on_log`:
+1. **ROS2 logging system** (`rosout`) - using rclrs logging macros
+2. **`/robot/board/log` topic** - using `rcl_interfaces/msg/Log` message type for easy filtering and subscription
 
 ### View Logs
 
 ```bash
-# Real-time view of all logs
-ros2 topic echo /rosout
+# Method 1: Via /robot/board/log topic (recommended)
+ros2 topic echo /robot/board/log
 
-# Board logs only
+# Method 2: Via rosout (includes all node logs)
 ros2 topic echo /rosout | grep servo_robot_board
 ```
 
-### Log Levels
+### Log Message Format
 
-| Level | Description |
-|-------|-------------|
-| `DEBUG` | Data publishing (IMU/Power/Battery/Thermal throttled to 1s) |
-| `INFO` | Service calls (params & results), system events |
-| `ERROR` | Publish failures, service execution failures |
+The `/robot/board/log` topic uses `rcl_interfaces/msg/Log` message type:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `stamp` | `builtin_interfaces/Time` | Timestamp (seconds + nanoseconds) |
+| `level` | `uint8` | Log level (DEBUG=10, INFO=20, WARN=30, ERROR=40) |
+| `name` | `string` | Node name (fixed as `servo_robot_board`) |
+| `msg` | `string` | Formatted log message `[HH:MM:SS.mmm] file::func: message` |
+| `file` | `string` | Source file name |
+| `function` | `string` | Function name |
+| `line` | `uint32` | Line number (fixed as 0) |
 
 ### Set Log Level at Runtime
 
@@ -186,37 +195,21 @@ ros2 topic echo /rosout | grep servo_robot_board
 ros2 run servo-robot-bridge servo_robot_board_bridge --ros-args --log-level debug
 ```
 
-## Architecture
-
-```
-┌─────────────────────────────────────────┐
-│         ROS2 Bridge Node                │
-│  ┌─────────────┐  ┌─────────────────┐  │
-│  │  Publishers  │  │    Services     │  │
-│  │  imu, power  │  │  query, write   │  │
-│  │  thermal...  │  │  switch         │  │
-│  └──────┬───────┘  └───────┬─────────┘  │
-│         │                  │            │
-│  ┌──────┴──────────────────┴──────┐     │
-│  │         Driver (sync)          │     │
-│  │  SerialTransport / Mock        │     │
-│  └────────────────────────────────┘     │
-└─────────────────────────────────────────┘
-```
-
-### Data Flow
+## Data Flow
 
 ```
 Read Thread → DriverState (state.update_*) → Main Loop (state.snapshot) → publish_data()
                                                         ↓
-Dispatch Thread → EventBus.dispatch()            ROS2 Topic Publishing (rosout log)
-                        ↓
-                BridgeCallback::on_log → ROS2 Logging System
+Dispatch Thread → EventBus.dispatch()            ROS2 Topic Publishing
+                        ↓                              ↓
+                BridgeCallback::on_log      /robot/board/log (rcl_interfaces/Log)
+                        ↓                              ↓
+                ROS2 Logging System          TUI / Other Subscribers
 ```
 
 - Main loop polls `state.snapshot()` every 50ms and publishes to ROS2 topics
 - Service requests handled synchronously via `driver.query_config_sync()` / `driver.write_config_sync()`
-- Board logs forwarded to ROS2 logging system via `DriverCallback::on_log`
+- Board logs forwarded to both ROS2 logging system and `/robot/board/log` topic
 
 ## File Description
 
@@ -230,19 +223,5 @@ Dispatch Thread → EventBus.dispatch()            ROS2 Topic Publishing (rosout
 | `build.rs` | Actual build script (generated from template) | ❌ |
 | `scripts/.env` | Environment variables | ❌ |
 
-## Install ROS2 Rust
 
-```bash
-# 1. Install Rust(Optiolal)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# 2. Clone ros2_rust
-mkdir -p ~/ros_pkgs/ros2_rust_ws/src
-cd ~/ros_pkgs/ros2_rust_ws/src
-git clone https://github.com/ros2-rust/ros2_rust.git
-vcs import < ros2_rust/ros2_rust_humble.repos
-
-# 3. Build
-cd ~/ros_pkgs/ros2_rust_ws
-colcon build --packages-up-to rclrs rosidl_generator_rs rosidl_runtime_rs
-```

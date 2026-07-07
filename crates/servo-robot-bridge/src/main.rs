@@ -1,11 +1,17 @@
-//! ROS2 桥接节点
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 10:18
+//! ROS2 bridge node
 
 mod conversion;
 mod services;
 
 use rclrs::*;
-use servo_robot_driver::{Driver, DriverCallback};
 use servo_robot_driver::protocol::log::{LogLevel, LogMessage};
+use servo_robot_driver::{Driver, DriverCallback};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -15,25 +21,56 @@ use servo_robot_driver::MockTransport;
 #[cfg(not(feature = "mock"))]
 use servo_robot_driver::SerialTransport;
 
-/// ROS2 桥接回调，将板级日志转发到 ROS2 日志系统
+/// ROS2 bridges callbacks to forward board-level logs to the ROS2 log system + /robot/board/log topic
 struct BridgeCallback {
     logger: Logger,
+    log_pub: Arc<Publisher<rcl_interfaces::msg::Log>>,
 }
 
 impl DriverCallback for BridgeCallback {
     fn on_log(&mut self, ts: u64, log_msg: &LogMessage) {
+        // 格式化日志消息
         let total_s = ts / 1000;
         let ms = ts % 1000;
         let h = (total_s % 86400) / 3600;
         let m = (total_s % 3600) / 60;
         let s = total_s % 60;
-        let msg = format!("[{:02}:{:02}:{:02}.{:03}] {}::{}: {}",
-            h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg);
+        let formatted = format!(
+            "[{:02}:{:02}:{:02}.{:03}] {}::{}: {}",
+            h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg
+        );
+
+        // 发布到 /robot/board/log
+        let ros_level = match log_msg.level {
+            LogLevel::Error => rcl_interfaces::msg::Log::ERROR,
+            LogLevel::Warn => rcl_interfaces::msg::Log::WARN,
+            LogLevel::Info | LogLevel::OFF => rcl_interfaces::msg::Log::INFO,
+            LogLevel::Debug => rcl_interfaces::msg::Log::DEBUG,
+        };
+        let log_msg_ros = rcl_interfaces::msg::Log {
+            stamp: builtin_interfaces::msg::Time {
+                sec: total_s as i32,
+                nanosec: (ms * 1_000_000) as u32,
+            },
+            level: ros_level,
+            name: "servo_robot_board".to_string(),
+            msg: formatted.clone(),
+            file: log_msg.file_name.clone(),
+            function: log_msg.fun_name.clone(),
+            line: 0,
+        };
+        if let Err(e) = self.log_pub.publish(log_msg_ros) {
+            log_error!(&self.logger, "Publish board log failed: {}", e);
+        }
+
+        // 同时输出到 ROS2 日志系统
         match log_msg.level {
-            LogLevel::Error => log_error!(&self.logger, "[servo_robot_board] {}", msg),
-            LogLevel::Warn => log_warn!(&self.logger, "[servo_robot_board] {}", msg),
-            LogLevel::Info | LogLevel::OFF => log_info!(&self.logger, "[servo_robot_board] {}", msg),
-            LogLevel::Debug => log_debug!(&self.logger, "[servo_robot_board] {}", msg),
+            LogLevel::Error => log_error!(&self.logger, "[servo_robot_board] {}", formatted),
+            LogLevel::Warn => log_warn!(&self.logger, "[servo_robot_board] {}", formatted),
+            LogLevel::Info | LogLevel::OFF => {
+                log_info!(&self.logger, "[servo_robot_board] {}", formatted)
+            }
+            LogLevel::Debug => log_debug!(&self.logger, "[servo_robot_board] {}", formatted),
         }
     }
 }
@@ -56,14 +93,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .default(115200)
         .mandatory()?;
 
+    // Create board-level log publishers
+    let log_pub = Arc::new(node.create_publisher::<rcl_interfaces::msg::Log>("/robot/board/log")?);
+
     #[cfg(feature = "mock")]
     {
         let mut mock = MockTransport::new();
         mock.set_charging(true);
-        mock.set_battery_soc(75.0);
+        mock.set_battery_soc(0.75);
         log_info!(node.logger(), "Starting with MockTransport");
         let mut driver = Driver::new(mock);
-        driver.register_callback(BridgeCallback { logger: node.logger().clone() });
+        driver.register_callback(BridgeCallback {
+            logger: node.logger().clone(),
+            log_pub: Arc::clone(&log_pub),
+        });
         driver.start()?;
         run_bridge(executor, node, driver)?;
     }
@@ -72,10 +115,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let port: Arc<str> = param_port.get();
         let baud_rate = param_baud_rate.get() as u32;
-        log_info!(node.logger(), "Connecting to {} at {} baud...", port, baud_rate);
+        log_info!(
+            node.logger(),
+            "Connecting to {} at {} baud...",
+            port,
+            baud_rate
+        );
         let transport = SerialTransport::open(&port, baud_rate)?;
         let mut driver = Driver::new(transport);
-        driver.register_callback(BridgeCallback { logger: node.logger().clone() });
+        driver.register_callback(BridgeCallback {
+            logger: node.logger().clone(),
+            log_pub: Arc::clone(&log_pub),
+        });
         driver.start()?;
         run_bridge(executor, node, driver)?;
     }
@@ -83,7 +134,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// 发布所有数据话题
+/// Publish all data topics
 fn publish_data(
     state: &servo_robot_driver::DriverState,
     logger: &Logger,
@@ -115,14 +166,22 @@ fn publish_data(
         if let Err(e) = battery_pub.publish(conversion::convert_battery(battery)) {
             log_error!(logger, "Publish Battery failed: {}", e);
         } else {
-            log_debug!(logger.throttle(Duration::from_secs(1)), "Battery: {}", battery);
+            log_debug!(
+                logger.throttle(Duration::from_secs(1)),
+                "Battery: {}",
+                battery
+            );
         }
     }
     if let Some(thermal) = &snap.thermal {
         if let Err(e) = thermal_pub.publish(conversion::convert_thermal(thermal)) {
             log_error!(logger, "Publish Thermal failed: {}", e);
         } else {
-            log_debug!(logger.throttle(Duration::from_secs(1)), "Thermal: {}", thermal);
+            log_debug!(
+                logger.throttle(Duration::from_secs(1)),
+                "Thermal: {}",
+                thermal
+            );
         }
     }
     if let Some(system) = &snap.system {
@@ -175,16 +234,23 @@ fn run_bridge(
 
     log_info!(&logger, "Publishers created");
 
-    // 创建服务
     let driver_clone = driver.clone();
     let logger_clone = logger.clone();
     let _query_srv = node.create_service::<servo_robot_board_interface::srv::BoardQueryConfig, _>(
         "/robot/board/query_config",
         move |req: servo_robot_board_interface::srv::BoardQueryConfig_Request| {
-            log_info!(&logger_clone, "Service query_config: type=0x{:02X}", req.config_type);
+            log_info!(
+                &logger_clone,
+                "Service query_config: type=0x{:02X}",
+                req.config_type
+            );
             let resp = services::handle_query_config(&driver_clone, req);
             if resp.success {
-                log_info!(&logger_clone, "Service query_config: ok, value={:.2}", resp.value);
+                log_info!(
+                    &logger_clone,
+                    "Service query_config: ok, value={:.2}",
+                    resp.value
+                );
             } else {
                 log_error!(&logger_clone, "Service query_config: failed, {}", resp.msg);
             }
@@ -203,7 +269,11 @@ fn run_bridge(
                 if resp.success {
                     log_info!(&logger_clone, "Service query_all_config: ok");
                 } else {
-                    log_error!(&logger_clone, "Service query_all_config: failed, {}", resp.msg);
+                    log_error!(
+                        &logger_clone,
+                        "Service query_all_config: failed, {}",
+                        resp.msg
+                    );
                 }
                 resp
             },
@@ -214,8 +284,12 @@ fn run_bridge(
     let _write_srv = node.create_service::<servo_robot_board_interface::srv::BoardWriteConfig, _>(
         "/robot/board/write_config",
         move |req: servo_robot_board_interface::srv::BoardWriteConfig_Request| {
-            log_info!(&logger_clone, "Service write_config: type=0x{:02X}, value={:.2}",
-                req.config_type, req.value);
+            log_info!(
+                &logger_clone,
+                "Service write_config: type=0x{:02X}, value={:.2}",
+                req.config_type,
+                req.value
+            );
             let resp = services::handle_write_config(&driver_clone, req);
             if resp.success {
                 log_info!(&logger_clone, "Service write_config: ok");
@@ -231,8 +305,12 @@ fn run_bridge(
     let _switch_srv = node.create_service::<servo_robot_board_interface::srv::BoardSwitch, _>(
         "/robot/board/switch",
         move |req: servo_robot_board_interface::srv::BoardSwitch_Request| {
-            log_info!(&logger_clone, "Service switch: type=0x{:02X}, enable={}",
-                req.switch_type, req.enable);
+            log_info!(
+                &logger_clone,
+                "Service switch: type=0x{:02X}, enable={}",
+                req.switch_type,
+                req.enable
+            );
             let resp = services::handle_switch(&driver_clone, req);
             if resp.success {
                 log_info!(&logger_clone, "Service switch: ok");
@@ -245,7 +323,7 @@ fn run_bridge(
 
     log_info!(&logger, "Services created, bridge ready!");
 
-    // 主循环：轮询状态 + 发布数据 + 处理服务回调
+    // Main loop: Polling state + publishing data + processing service callbacks
     loop {
         publish_data(
             &state,
@@ -259,7 +337,8 @@ fn run_bridge(
             &battery_pub,
         );
 
-        executor.spin(SpinOptions::spin_once());
-        std::thread::sleep(Duration::from_millis(50));
+        // spin_once timeouts to prevent blockages that could prevent publish_data from executing
+        executor.spin(SpinOptions::spin_once().timeout(Duration::from_millis(100)));
+        std::thread::sleep(Duration::from_millis(40));
     }
 }

@@ -27,10 +27,10 @@ colcon build
 
 ```bash
 # 使用默认路径
-source scripts/enable-ros2-bridge.sh
+source scripts/init_workspace.sh --ros2_support
 
 # 或指定路径
-source scripts/enable-ros2-bridge.sh ~/ros_pkgs/ros2_rust_ws ~/ros_pkgs/servo_robot_board_ws
+source scripts/init_workspace.sh --ros2_support ~/ros_pkgs/ros2_rust_ws ~/ros_pkgs/servo_robot_board_ws
 ```
 
 脚本会：
@@ -128,10 +128,11 @@ ros2 param get servo_robot_board_bridge baud_rate
 | `/robot/board/imu` | `sensor_msgs/Imu` | IMU 数据（四元数、角速度、加速度） |
 | `/robot/board/power` | `BoardPower` | 电源数据（舵机/充电/电池电压电流） |
 | `/robot/board/thermal` | `BoardThermal` | 温度数据（舵机/5V/MCU/充电/电池） |
-| `/robot/board/system` | `BoardSystem` | 系统信息（设备ID、运行时间、错误计数、PD电压电流） |
-| `/robot/board/event` | `BoardEvent` | 事件（充电状态、风扇、保护标志、错误标志） |
+| `/robot/board/system` | `BoardSystem` | 系统信息（设备ID、运行时间、错误计数、PD电压电流、固件版本） |
+| `/robot/board/event` | `BoardEvent` | 事件（充电状态、状态变化标志、保护标志、错误标志） |
 | `/robot/board/config` | `BoardConfig` | 配置快照（所有配置参数 + 开关状态 + 日志等级） |
-| `/robot/board/battery` | `sensor_msgs/BatteryState` | 电池状态（电压、电流、SOC、电芯电压温度） |
+| `/robot/board/battery` | `sensor_msgs/BatteryState` | 电池状态（电压、电流、电量百分比、电芯电压温度） |
+| `/robot/board/log` | `rcl_interfaces/Log` | 板级日志（时间戳、等级、文件名、函数名、消息内容） |
 
 ### 服务
 
@@ -160,25 +161,33 @@ ros2 service call /robot/board/query_all_config servo_robot_board_interface/srv/
 
 ## 日志
 
-板级日志通过 `DriverCallback::on_log` 转发到 ROS2 日志系统（`rosout`），使用 rclrs 日志宏输出。
+板级日志通过 `DriverCallback::on_log` 转发到两个地方：
+1. **ROS2 日志系统**（`rosout`）- 使用 rclrs 日志宏输出
+2. **`/robot/board/log` 话题** - 使用 `rcl_interfaces/msg/Log` 消息类型，便于过滤和订阅
 
 ### 查看日志
 
 ```bash
-# 实时查看所有日志
-ros2 topic echo /rosout
+# 方式1：通过 /robot/board/log 话题（推荐）
+ros2 topic echo /robot/board/log
 
-# 只看板级日志
+# 方式2：通过 rosout（包含所有节点日志）
 ros2 topic echo /rosout | grep servo_robot_board
 ```
 
-### 日志等级
+### 日志消息格式
 
-| 等级 | 说明 |
-|------|------|
-| `DEBUG` | 数据发布（IMU/Power/Battery/Thermal 限流 1s 一次） |
-| `INFO` | 服务调用（参数和结果）、系统事件 |
-| `ERROR` | 发布失败、服务执行失败 |
+`/robot/board/log` 话题使用 `rcl_interfaces/msg/Log` 消息类型：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `stamp` | `builtin_interfaces/Time` | 时间戳（秒 + 纳秒） |
+| `level` | `uint8` | 日志等级（DEBUG=10, INFO=20, WARN=30, ERROR=40） |
+| `name` | `string` | 节点名称（固定为 `servo_robot_board`） |
+| `msg` | `string` | 格式化的日志消息 `[HH:MM:SS.mmm] file::func: message` |
+| `file` | `string` | 源文件名 |
+| `function` | `string` | 函数名 |
+| `line` | `uint32` | 行号（固定为 0） |
 
 ### 运行时设置日志等级
 
@@ -186,37 +195,21 @@ ros2 topic echo /rosout | grep servo_robot_board
 ros2 run servo-robot-bridge servo_robot_board_bridge --ros-args --log-level debug
 ```
 
-## 架构
-
-```
-┌─────────────────────────────────────────┐
-│         ROS2 Bridge Node                │
-│  ┌─────────────┐  ┌─────────────────┐  │
-│  │  Publishers  │  │    Services     │  │
-│  │  imu, power  │  │  query, write   │  │
-│  │  thermal...  │  │  switch         │  │
-│  └──────┬───────┘  └───────┬─────────┘  │
-│         │                  │            │
-│  ┌──────┴──────────────────┴──────┐     │
-│  │         Driver (sync)          │     │
-│  │  SerialTransport / Mock        │     │
-│  └────────────────────────────────┘     │
-└─────────────────────────────────────────┘
-```
-
-### 数据流
+## 数据流
 
 ```
 读线程 → DriverState (state.update_*) → 主循环 (state.snapshot) → publish_data()
                                                     ↓
-分发线程 → EventBus.dispatch()              ROS2 话题发布 (rosout 日志)
-                    ↓
-            BridgeCallback::on_log → ROS2 日志系统
+分发线程 → EventBus.dispatch()              ROS2 话题发布
+                    ↓                              ↓
+            BridgeCallback::on_log      /robot/board/log (rcl_interfaces/Log)
+                    ↓                              ↓
+            ROS2 日志系统 (rosout)        TUI / 其他订阅者
 ```
 
 - 主循环每 50ms 轮询 `state.snapshot()` 获取最新数据并发布到 ROS2 话题
 - 服务请求通过 `driver.query_config_sync()` / `driver.write_config_sync()` 同步处理
-- 板级日志通过 `DriverCallback::on_log` 转发到 ROS2 日志系统
+- 板级日志同时转发到 ROS2 日志系统和 `/robot/board/log` 话题
 
 ## 文件说明
 

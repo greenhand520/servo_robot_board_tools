@@ -1,8 +1,53 @@
+use std::env;
+use std::path::Path;
+
+/// 回退路径（当 AMENT_PREFIX_PATH 不完整时使用）
+const FALLBACK_PATHS: &[&str] = &[
+    "/opt/ros/humble",
+    "${ROS2_RUST_WS}/install/builtin_interfaces",
+    "${ROS2_RUST_WS}/install/rcl_interfaces",
+    "${ROS2_RUST_WS}/install/std_msgs",
+    "${ROS2_RUST_WS}/install/test_msgs",
+    "${ROS2_RUST_WS}/install/sensor_msgs",
+    "${ROS2_RUST_WS}/install/geometry_msgs",
+    "${SERVO_ROBOT_BOARD_WS}/install/servo_robot_board_interface",
+];
+
 fn main() {
-    println!("cargo:rustc-link-search=native=${SERVO_ROBOT_BOARD_WS}/build/servo_robot_board_interface");
-    println!("cargo:rustc-link-search=native=${ROS2_RUST_WS}/build/builtin_interfaces");
-    println!("cargo:rustc-link-search=native=${ROS2_RUST_WS}/build/std_msgs");
-    println!("cargo:rustc-link-search=native=${ROS2_RUST_WS}/build/geometry_msgs");
-    println!("cargo:rustc-link-search=native=${ROS2_RUST_WS}/build/sensor_msgs");
-    println!("cargo:rustc-link-search=native=/opt/ros/humble/lib");
+    let mut found_paths = Vec::new();
+
+    // 从 AMENT_PREFIX_PATH 动态添加链接搜索路径
+    match env::var("AMENT_PREFIX_PATH") {
+        Ok(ament_paths) => {
+            for path in ament_paths.split(':') {
+                if path.is_empty() { continue; }
+                let lib_path = Path::new(path).join("lib");
+                if lib_path.exists() {
+                    println!("cargo:rustc-link-search=native={}", lib_path.display());
+                    found_paths.push(path.to_string());
+                }
+            }
+        }
+        Err(_) => {
+            println!("cargo:warning=AMENT_PREFIX_PATH not set!");
+        }
+    }
+
+    // 回退：如果 AMENT_PREFIX_PATH 只有 /opt/ros/humble，补充其他路径
+    let needs_fallback = found_paths.len() <= 1
+        || !found_paths.iter().any(|p| p.contains("ros2_rust_ws"));
+
+    if needs_fallback {
+        println!("cargo:warning=AMENT_PREFIX_PATH incomplete ({} paths), adding fallback paths", found_paths.len());
+        for &path in FALLBACK_PATHS {
+            let lib_path = Path::new(path).join("lib");
+            if lib_path.exists() {
+                println!("cargo:rustc-link-search=native={}", lib_path.display());
+            }
+        }
+    }
+
+    // 通知 Cargo 在环境变量变化时重新运行
+    println!("cargo:rerun-if-env-changed=AMENT_PREFIX_PATH");
+    println!("cargo:rerun-if-env-changed=LD_LIBRARY_PATH");
 }

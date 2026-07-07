@@ -1,9 +1,19 @@
-//! 数据类型转换
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 10:30
+//! ROS2 bridge node
+//!Data type conversion, include:
+//! protocol::ImuData -> sensors_msg::Imu
+//! protocol::BatteryState -> sensors_msg::BatteryState
+//! other protocol data -> servo_robot_board_interface::msg::*
 
-use servo_robot_driver::protocol::*;
-use sensor_msgs::msg as sensor_msg;
 use geometry_msgs::msg as geo_msg;
+use sensor_msgs::msg as sensor_msg;
 use servo_robot_board_interface::msg as board_msg;
+use servo_robot_driver::protocol::*;
 
 pub fn convert_imu(data: &imu::ImuData) -> sensor_msg::Imu {
     sensor_msg::Imu {
@@ -64,14 +74,14 @@ pub fn convert_system(data: &system::SystemInfo) -> board_msg::BoardSystem {
         frames_sent_total: data.frames_sent_total,
         pd_request_voltage: data.pd_request_voltage,
         pd_request_current: data.pd_request_current,
+        firmware_version: format!("{}", data.firmware_version),
     }
 }
 
 pub fn convert_event(data: &event::BoardEvent) -> board_msg::BoardEvent {
     board_msg::BoardEvent {
-        charger_connected: data.charger_connected,
-        fan_enabled: data.fan_enabled,
         charge_phase: data.charge_phase as u8,
+        state_change_flags: data.state_change_flags.bits(),
         protection_flags: data.protection_flags.bits(),
         error_flags: data.error_flags.bits(),
     }
@@ -88,7 +98,7 @@ pub fn convert_config(data: &config::BoardConfigSnapshot) -> board_msg::BoardCon
         charge_stop_voltage: data.charge_stop_voltage,
         charge_stop_percentage: data.charge_stop_percentage,
         charge_enable: data.charge_enable,
-        servo_power_on: data.servo_power_on,
+        power_servo_on: data.power_servo_on,
         power_5v_on: data.power_5v_on,
         charge_on: data.charge_on,
         bat_ext_out_on: data.bat_ext_out_on,
@@ -102,10 +112,10 @@ pub fn convert_battery(data: &battery_state::BatteryState) -> sensor_msg::Batter
     sensor_msg::BatteryState {
         voltage: data.voltage,
         current: data.current,
-        charge: data.soc,
+        charge: data.capacity * data.percentage,
         capacity: data.capacity,
         design_capacity: data.design_capacity,
-        percentage: data.percentage / 100.0,  // ROS2 uses 0-1 range
+        percentage: data.percentage,
         temperature: data.temperature,
         power_supply_status: data.charge_status as u8,
         power_supply_health: data.health as u8,
