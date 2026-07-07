@@ -1,9 +1,16 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/6 21:43
+
 //! 模拟传输层实现
 
-pub(crate) mod mock_core;
-pub mod mock_data;
 #[cfg(feature = "async")]
 pub mod async_mock;
+pub(crate) mod mock_core;
+pub mod mock_data;
 
 use crate::error::DriverError;
 use crate::transport::Transport;
@@ -21,17 +28,35 @@ pub struct MockTransport {
 impl MockTransport {
     pub fn new() -> Self {
         log::info!("MockTransport created (mock mode)");
-        MockTransport { core: MockCore::new() }
+        MockTransport {
+            core: MockCore::new(),
+        }
     }
 
-    pub fn set_battery_soc(&mut self, percentage: f32) { self.core.set_battery_soc(percentage); }
-    pub fn set_initial_attitude(&mut self, roll_deg: f32, pitch_deg: f32, yaw_deg: f32) { self.core.set_initial_attitude(roll_deg, pitch_deg, yaw_deg); }
-    pub fn set_charging(&mut self, charging: bool) { self.core.set_charging(charging); }
-    pub fn set_charging_probability(&mut self, p: f64) { self.core.set_charging_probability(p); }
-    pub fn set_auto_disconnect(&mut self, after_frames: u64) { self.core.set_auto_disconnect(after_frames); }
-    pub fn disconnect(&mut self) { self.core.disconnect(); }
-    pub fn reconnect(&mut self) { self.core.reconnect(); }
-    pub fn written_frames(&self) -> &[Vec<u8>] { self.core.written_frames() }
+    pub fn set_battery_soc(&mut self, percentage: f32) {
+        self.core.set_battery_soc(percentage);
+    }
+    pub fn set_initial_attitude(&mut self, roll_deg: f32, pitch_deg: f32, yaw_deg: f32) {
+        self.core.set_initial_attitude(roll_deg, pitch_deg, yaw_deg);
+    }
+    pub fn set_charging(&mut self, charging: bool) {
+        self.core.set_charging(charging);
+    }
+    pub fn set_charging_probability(&mut self, p: f64) {
+        self.core.set_charging_probability(p);
+    }
+    pub fn set_auto_disconnect(&mut self, after_frames: u64) {
+        self.core.set_auto_disconnect(after_frames);
+    }
+    pub fn disconnect(&mut self) {
+        self.core.disconnect();
+    }
+    pub fn reconnect(&mut self) {
+        self.core.reconnect();
+    }
+    pub fn written_frames(&self) -> &[Vec<u8>] {
+        self.core.written_frames()
+    }
 }
 
 impl Transport for MockTransport {

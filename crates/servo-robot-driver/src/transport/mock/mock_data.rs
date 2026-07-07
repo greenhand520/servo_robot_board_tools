@@ -1,3 +1,10 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/6 21:43
+
 //! 模拟数据生成器
 
 use rand::RngExt;
@@ -44,12 +51,24 @@ impl ImuSimulator {
         self.pitch += drift_rate * dt * 0.7 + rng.random_range(-0.02f32..0.02f32);
         self.yaw += drift_rate * dt * 0.5 + rng.random_range(-0.01f32..0.01f32);
 
-        if self.roll > PI { self.roll -= 2.0 * PI; }
-        if self.roll < -PI { self.roll += 2.0 * PI; }
-        if self.pitch > PI / 2.0 { self.pitch = PI / 2.0; }
-        if self.pitch < -PI / 2.0 { self.pitch = -PI / 2.0; }
-        if self.yaw > PI { self.yaw -= 2.0 * PI; }
-        if self.yaw < -PI { self.yaw += 2.0 * PI; }
+        if self.roll > PI {
+            self.roll -= 2.0 * PI;
+        }
+        if self.roll < -PI {
+            self.roll += 2.0 * PI;
+        }
+        if self.pitch > PI / 2.0 {
+            self.pitch = PI / 2.0;
+        }
+        if self.pitch < -PI / 2.0 {
+            self.pitch = -PI / 2.0;
+        }
+        if self.yaw > PI {
+            self.yaw -= 2.0 * PI;
+        }
+        if self.yaw < -PI {
+            self.yaw += 2.0 * PI;
+        }
 
         let (sr, cr) = (self.roll / 2.0).sin_cos();
         let (sp, cp) = (self.pitch / 2.0).sin_cos();
@@ -62,7 +81,8 @@ impl ImuSimulator {
         let gravity = 9.81f32;
         let accel_x = -gravity * self.pitch.sin() + rng.random_range(-0.05f32..0.05f32);
         let accel_y = gravity * self.roll.sin() + rng.random_range(-0.05f32..0.05f32);
-        let accel_z = gravity * self.pitch.cos() * self.roll.cos() + rng.random_range(-0.05f32..0.05f32);
+        let accel_z =
+            gravity * self.pitch.cos() * self.roll.cos() + rng.random_range(-0.05f32..0.05f32);
 
         let gyro_x = self.gyro_bias[0] + rng.random_range(-0.1f32..0.1f32);
         let gyro_y = self.gyro_bias[1] + rng.random_range(-0.1f32..0.1f32);
@@ -112,7 +132,10 @@ impl PowerSimulator {
         }
 
         let (charge_voltage, charge_current): (f32, f32) = if self.charging {
-            (20.0 + rng.random_range(-1.0f32..1.0f32), 5.0 + rng.random_range(-4.5f32..5.0f32))
+            (
+                20.0 + rng.random_range(-1.0f32..1.0f32),
+                5.0 + rng.random_range(-4.5f32..5.0f32),
+            )
         } else {
             (0.0, 0.0)
         };
@@ -160,7 +183,8 @@ impl ThermalSimulator {
 
 /// 电池状态模拟
 pub struct BatterySimulator {
-    pub soc: f32,
+    // 0~1
+    pub percentage: f32,
     pub charging: bool,
     pub cell_count: usize,
 }
@@ -168,7 +192,7 @@ pub struct BatterySimulator {
 impl BatterySimulator {
     pub fn new() -> Self {
         BatterySimulator {
-            soc: 80.0f32,
+            percentage: 0.8,
             charging: false,
             cell_count: 4,
         }
@@ -178,13 +202,13 @@ impl BatterySimulator {
         let mut rng = rand::rng();
 
         if self.charging {
-            self.soc = (self.soc + 0.01f32).min(100.0);
+            self.percentage = (self.percentage + 0.01f32).min(1.0);
         } else {
-            self.soc = (self.soc - 0.005f32).max(0.0);
+            self.percentage = (self.percentage - 0.005f32).max(0.0);
         }
 
         // 每节电芯电压随电量变化：满电4.2V，空电3.0V，限制在0~4.4V
-        let cell_base = 3.0f32 + (self.soc / 100.0) * 1.2;
+        let cell_base = 3.0f32 + self.percentage * 1.2;
         let cell_voltages: Vec<f32> = (0..self.cell_count)
             .map(|_| (cell_base + rng.random_range(-0.02f32..0.02f32)).clamp(0.0, 4.4))
             .collect();
@@ -206,10 +230,9 @@ impl BatterySimulator {
         crate::protocol::battery_state::BatteryState {
             voltage,
             current,
-            soc: self.soc * 50.0,
             capacity,
             design_capacity: 5000.0,
-            percentage: self.soc,
+            percentage: self.percentage,
             temperature: 28.0 + rng.random_range(-1.0f32..1.0),
             charge_status: if self.charging {
                 crate::protocol::battery_state::BatteryChargeStatus::Charging
@@ -248,16 +271,12 @@ impl SystemSimulator {
         let uptime = self.start_time.elapsed().as_secs();
 
         // PD 握手信息（充电时固定 20V/5A）
-        let (pd_voltage, pd_current) = if self.charging {
-            (20000, 5000)
-        } else {
-            (0, 0)
-        };
+        let (pd_voltage, pd_current) = if self.charging { (20000, 5000) } else { (0, 0) };
 
         crate::protocol::system::SystemInfo {
-            device_id: 0x4832,  // STM32F4 device ID
-            uid: 0x12345678,    // 模拟唯一ID
-            imu_id: 0x70,          // IMU ID
+            device_id: 0x4832, // STM32F4 device ID
+            uid: 0x12345678,   // 模拟唯一ID
+            imu_id: 0x70,      // IMU ID
             uptime_s: uptime as u32,
             cpu_usage_percent: 35 + rng.random_range(0u8..15),
             free_heap_kb: 120 + rng.random_range(0u16..30),
@@ -269,6 +288,7 @@ impl SystemSimulator {
             frames_sent_total: self.frame_count,
             pd_request_voltage: pd_voltage,
             pd_request_current: pd_current,
+            firmware_version: crate::protocol::system::Version::new(0, 1, 0), // 模拟固件版本
         }
     }
 }
@@ -318,10 +338,18 @@ impl EventSimulator {
             crate::protocol::event::ErrorFlags::empty()
         };
 
+        use crate::protocol::event::StateChangeFlags;
+        let mut state_change_flags = StateChangeFlags::empty();
+        if self.charging {
+            state_change_flags |= StateChangeFlags::CHARGER_CONNECTED;
+        }
+        if self.event_count % 100 < 50 {
+            state_change_flags |= StateChangeFlags::FAN_ENABLED;
+        }
+
         crate::protocol::event::BoardEvent {
-            charger_connected: self.charging,
-            fan_enabled: self.event_count % 100 < 50,  // 模拟风扇开关
             charge_phase,
+            state_change_flags,
             protection_flags,
             error_flags,
         }
@@ -336,11 +364,16 @@ mod tests {
     #[test]
     fn test_battery_voltage_range() {
         let mut sim = BatterySimulator::new();
-        sim.soc = 100.0; // 满电测试
+        sim.percentage = 1.0; // 满电测试
         for _ in 0..100 {
             let state = sim.generate();
             for (i, v) in state.cell_voltages.iter().enumerate() {
-                assert!(*v >= 0.0 && *v <= 4.4, "Cell{} voltage {} out of range [0, 4.4]", i+1, v);
+                assert!(
+                    *v >= 0.0 && *v <= 4.4,
+                    "Cell{} voltage {} out of range [0, 4.4]",
+                    i + 1,
+                    v
+                );
             }
         }
     }
@@ -348,7 +381,7 @@ mod tests {
     #[test]
     fn test_battery_encode_decode_roundtrip() {
         let mut sim = BatterySimulator::new();
-        sim.soc = 100.0;
+        sim.percentage = 1.0;
         let state = sim.generate();
 
         let payload = state.to_bytes();
@@ -361,13 +394,30 @@ mod tests {
         let encoded = frame.encode();
         let (decoded, _) = RawFrame::decode(&encoded).unwrap();
 
-        assert_eq!(decoded.payload.len(), payload_len,
-            "Payload length mismatch: {} vs {}", decoded.payload.len(), payload_len);
+        assert_eq!(
+            decoded.payload.len(),
+            payload_len,
+            "Payload length mismatch: {} vs {}",
+            decoded.payload.len(),
+            payload_len
+        );
 
-        let state2 = crate::protocol::battery_state::BatteryState::from_bytes(&decoded.payload).unwrap();
+        let state2 =
+            crate::protocol::battery_state::BatteryState::from_bytes(&decoded.payload).unwrap();
 
-        for (i, (v1, v2)) in state.cell_voltages.iter().zip(state2.cell_voltages.iter()).enumerate() {
-            assert!((v1 - v2).abs() < 0.05, "Cell{} voltage mismatch: {} vs {}", i+1, v1, v2);
+        for (i, (v1, v2)) in state
+            .cell_voltages
+            .iter()
+            .zip(state2.cell_voltages.iter())
+            .enumerate()
+        {
+            assert!(
+                (v1 - v2).abs() < 0.05,
+                "Cell{} voltage mismatch: {} vs {}",
+                i + 1,
+                v1,
+                v2
+            );
         }
     }
 }

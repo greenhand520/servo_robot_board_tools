@@ -1,4 +1,11 @@
-//! Driver 主结构体
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 12:39
+
+//! Driver
 
 use crate::dispatch::callback::DriverCallback;
 use crate::dispatch::{DriverEvent, EventBus};
@@ -152,7 +159,10 @@ impl Driver {
     /// 写入配置到 STM32（不等待应答）
     pub fn write_config(&self, config: Config) -> Result<(), DriverError> {
         let encoded = driver_common::encode_cfg_write(&config);
-        let mut transport = self.transport.lock().map_err(|_| DriverError::LockPoisoned)?;
+        let mut transport = self
+            .transport
+            .lock()
+            .map_err(|_| DriverError::LockPoisoned)?;
         match transport.as_mut() {
             Some(t) => t.write_frame(&encoded)?,
             None => return Err(DriverError::TransportClosed),
@@ -163,7 +173,10 @@ impl Driver {
     /// 查询单个配置（不等待应答）
     pub fn query_config(&self, config_type: ConfigType) -> Result<(), DriverError> {
         let encoded = driver_common::encode_cfg_query(config_type);
-        let mut transport = self.transport.lock().map_err(|_| DriverError::LockPoisoned)?;
+        let mut transport = self
+            .transport
+            .lock()
+            .map_err(|_| DriverError::LockPoisoned)?;
         match transport.as_mut() {
             Some(t) => t.write_frame(&encoded)?,
             None => return Err(DriverError::TransportClosed),
@@ -174,7 +187,10 @@ impl Driver {
     /// 查询所有配置（不等待应答）
     pub fn query_all_configs(&self) -> Result<(), DriverError> {
         let encoded = driver_common::encode_cfg_query_all();
-        let mut transport = self.transport.lock().map_err(|_| DriverError::LockPoisoned)?;
+        let mut transport = self
+            .transport
+            .lock()
+            .map_err(|_| DriverError::LockPoisoned)?;
         match transport.as_mut() {
             Some(t) => t.write_frame(&encoded)?,
             None => return Err(DriverError::TransportClosed),
@@ -312,7 +328,9 @@ impl Driver {
                             );
                         } else {
                             state.set_error(DriverError::TransportClosed);
-                            let _ = bus.sender().send(DriverEvent::Error(DriverError::TransportClosed));
+                            let _ = bus
+                                .sender()
+                                .send(DriverEvent::Error(DriverError::TransportClosed));
                             break;
                         }
                         continue;
@@ -344,7 +362,9 @@ impl Driver {
                                 &mut retry_count,
                             );
                         } else {
-                            let _ = bus.sender().send(DriverEvent::Error(DriverError::TransportClosed));
+                            let _ = bus
+                                .sender()
+                                .send(DriverEvent::Error(DriverError::TransportClosed));
                             break;
                         }
                         continue;

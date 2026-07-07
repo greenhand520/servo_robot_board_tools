@@ -1,3 +1,10 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 12:39
+
 //! 基于 serialport crate 的传输层实现
 
 use crate::error::DriverError;
@@ -16,7 +23,10 @@ pub struct SerialTransport {
 impl SerialTransport {
     /// 创建新的串口传输层
     pub fn new(port: Box<dyn SerialPort>) -> Self {
-        SerialTransport { port, port_name: "<raw>".into() }
+        SerialTransport {
+            port,
+            port_name: "<raw>".into(),
+        }
     }
 
     /// 打开串口
@@ -26,7 +36,10 @@ impl SerialTransport {
             .timeout(Duration::from_millis(100))
             .open()?;
         log::info!("Serial port opened: {}", port_name);
-        Ok(SerialTransport { port, port_name: port_name.into() })
+        Ok(SerialTransport {
+            port,
+            port_name: port_name.into(),
+        })
     }
 }
 
@@ -80,7 +93,13 @@ pub(crate) fn read_frame_from_reader(
     frame.extend_from_slice(&payload);
     frame.extend_from_slice(&crc_buf);
 
-    log::trace!("[{}] RX: {:02X?} (type=0x{:02X}, len={})", port_name, frame, type_buf[0], payload_len);
+    log::trace!(
+        "[{}] RX: {:02X?} (type=0x{:02X}, len={})",
+        port_name,
+        frame,
+        type_buf[0],
+        payload_len
+    );
 
     Ok(frame)
 }
@@ -91,7 +110,12 @@ impl Transport for SerialTransport {
     }
 
     fn write_frame(&mut self, frame: &[u8]) -> Result<(), DriverError> {
-        log::trace!("[{}] TX: {:02X?} ({} bytes)", self.port_name, frame, frame.len());
+        log::trace!(
+            "[{}] TX: {:02X?} ({} bytes)",
+            self.port_name,
+            frame,
+            frame.len()
+        );
         self.port.write_all(frame)?;
         self.port.flush()?;
         Ok(())

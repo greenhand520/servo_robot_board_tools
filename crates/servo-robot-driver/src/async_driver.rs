@@ -1,4 +1,11 @@
-//! 异步 Driver 主结构体
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/6 21:43
+
+//! Async driver (experimental, not full test)
 
 use crate::dispatch::callback::DriverCallback;
 use crate::dispatch::{DriverEvent, EventBus};
@@ -8,8 +15,8 @@ use crate::protocol::config::{BoardConfigSnapshot, Config, ConfigType};
 use crate::reconnect::ReconnectConfig;
 use crate::state::DriverState;
 use crate::transport::async_trait::{AsyncTransport, AsyncTransportFactory};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -289,7 +296,9 @@ impl AsyncDriver {
                             .await;
                         } else {
                             state.set_error(DriverError::TransportClosed);
-                            let _ = bus.sender().send(DriverEvent::Error(DriverError::TransportClosed));
+                            let _ = bus
+                                .sender()
+                                .send(DriverEvent::Error(DriverError::TransportClosed));
                             break;
                         }
                         continue;
@@ -317,7 +326,9 @@ impl AsyncDriver {
                             )
                             .await;
                         } else {
-                            let _ = bus.sender().send(DriverEvent::Error(DriverError::TransportClosed));
+                            let _ = bus
+                                .sender()
+                                .send(DriverEvent::Error(DriverError::TransportClosed));
                             break;
                         }
                         continue;

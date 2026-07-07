@@ -1,3 +1,10 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 12:39
+
 //! DriverCallback trait 定义
 
 use crate::error::DriverError;
@@ -7,8 +14,8 @@ use crate::protocol::event::BoardEvent;
 use crate::protocol::imu::ImuData;
 use crate::protocol::log::{LogLevel, LogMessage};
 use crate::protocol::power::PowerData;
-use crate::protocol::thermal::ThermalData;
 use crate::protocol::system::SystemInfo;
+use crate::protocol::thermal::ThermalData;
 
 /// 回调 trait — 实现感兴趣的回调，其余用默认空实现
 ///
@@ -53,10 +60,50 @@ pub trait DriverCallback: Send + 'static {
         let s = total_s % 60;
         let prefix = "[ServoRobotBoard]";
         match log_msg.level {
-            LogLevel::Error => log::error!("{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}", prefix, h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg),
-            LogLevel::Warn => log::warn!("{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}", prefix, h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg),
-            LogLevel::Info | LogLevel::OFF => log::info!("{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}", prefix, h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg),
-            LogLevel::Debug => log::debug!("{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}", prefix, h, m, s, ms, log_msg.file_name, log_msg.fun_name, log_msg.msg),
+            LogLevel::Error => log::error!(
+                "{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}",
+                prefix,
+                h,
+                m,
+                s,
+                ms,
+                log_msg.file_name,
+                log_msg.fun_name,
+                log_msg.msg
+            ),
+            LogLevel::Warn => log::warn!(
+                "{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}",
+                prefix,
+                h,
+                m,
+                s,
+                ms,
+                log_msg.file_name,
+                log_msg.fun_name,
+                log_msg.msg
+            ),
+            LogLevel::Info | LogLevel::OFF => log::info!(
+                "{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}",
+                prefix,
+                h,
+                m,
+                s,
+                ms,
+                log_msg.file_name,
+                log_msg.fun_name,
+                log_msg.msg
+            ),
+            LogLevel::Debug => log::debug!(
+                "{} [{:02}:{:02}:{:02}.{:03}] {}::{}: {}",
+                prefix,
+                h,
+                m,
+                s,
+                ms,
+                log_msg.file_name,
+                log_msg.fun_name,
+                log_msg.msg
+            ),
         }
     }
 

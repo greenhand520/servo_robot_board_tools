@@ -1,4 +1,11 @@
-//! 状态快照（给 TUI 用）
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 12:39
+
+//! Status snapshot (for TUI/ROS2 node)
 
 use crate::error::DriverError;
 use crate::protocol::battery_state::BatteryState;
@@ -6,10 +13,22 @@ use crate::protocol::config::BoardConfigSnapshot;
 use crate::protocol::event::BoardEvent;
 use crate::protocol::imu::ImuData;
 use crate::protocol::power::PowerData;
-use crate::protocol::thermal::ThermalData;
 use crate::protocol::system::SystemInfo;
+use crate::protocol::thermal::ThermalData;
+use std::collections::VecDeque;
 use std::sync::Mutex;
 use std::time::Instant;
+use servo_robot_protocol::log::LogMessage;
+
+/// 板级日志条目（带时间戳）
+#[derive(Debug, Clone)]
+pub struct LogEntry {
+    pub ts: u64,
+    pub msg: LogMessage,
+}
+
+/// 日志缓冲区最大条数
+const LOG_BUFFER_SIZE: usize = 100;
 
 /// 线程安全的状态快照，供 TUI 轮询
 pub struct DriverState {
@@ -24,11 +43,12 @@ struct StateInner {
     pub config: Option<BoardConfigSnapshot>,
     pub event: Option<BoardEvent>,
     pub system: Option<SystemInfo>,
+    pub logs: VecDeque<LogEntry>,
     pub last_error: Option<DriverError>,
     pub connected: bool,
     pub frame_count: u64,
-    pub frames_parsed: u64,      // 成功解析的帧数
-    pub frames_dropped: u64,     // 解析失败的帧数
+    pub frames_parsed: u64,  // 成功解析的帧数
+    pub frames_dropped: u64, // 解析失败的帧数
     pub last_frame_time: Option<Instant>,
 }
 
@@ -43,6 +63,7 @@ impl DriverState {
                 config: None,
                 event: None,
                 system: None,
+                logs: VecDeque::with_capacity(LOG_BUFFER_SIZE),
                 last_error: None,
                 connected: false,
                 frame_count: 0,
@@ -64,6 +85,7 @@ impl DriverState {
             config: inner.config.clone(),
             event: inner.event.clone(),
             system: inner.system.clone(),
+            logs: inner.logs.clone(),
             connected: inner.connected,
             frame_count: inner.frame_count,
             frames_parsed: inner.frames_parsed,
@@ -98,6 +120,16 @@ impl DriverState {
 
     pub fn system(&self) -> Option<SystemInfo> {
         self.inner.lock().unwrap().system.clone()
+    }
+
+    /// 获取最新一条日志
+    pub fn log(&self) -> Option<LogEntry> {
+        self.inner.lock().unwrap().logs.back().cloned()
+    }
+
+    /// 获取所有日志（用于快照）
+    pub fn logs(&self) -> VecDeque<LogEntry> {
+        self.inner.lock().unwrap().logs.clone()
     }
 
     pub fn last_error(&self) -> Option<DriverError> {
@@ -176,6 +208,14 @@ impl DriverState {
         inner.frame_count += 1;
     }
 
+    pub(crate) fn update_log(&self, ts: u64, info: LogMessage) {
+        let mut inner = self.inner.lock().unwrap();
+        if inner.logs.len() >= LOG_BUFFER_SIZE {
+            inner.logs.pop_front();
+        }
+        inner.logs.push_back(LogEntry { ts, msg: info });
+    }
+
     pub(crate) fn set_connected(&self, connected: bool) {
         self.inner.lock().unwrap().connected = connected;
     }
@@ -195,6 +235,7 @@ pub struct StateSnapshot {
     pub config: Option<BoardConfigSnapshot>,
     pub event: Option<BoardEvent>,
     pub system: Option<SystemInfo>,
+    pub logs: VecDeque<LogEntry>,
     pub connected: bool,
     pub frame_count: u64,
     pub frames_parsed: u64,

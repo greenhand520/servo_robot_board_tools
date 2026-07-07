@@ -1,4 +1,11 @@
-//! Driver 共享纯逻辑函数
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/6 21:43
+
+//! Driver shares functions
 
 use crate::dispatch::DriverEvent;
 use crate::protocol::config::{Config, ConfigType};
@@ -11,7 +18,8 @@ pub(crate) fn encode_cfg_write(config: &Config) -> Vec<u8> {
     RawFrame {
         frame_type: FrameType::CfgWrite,
         payload: config.to_bytes(),
-    }.encode()
+    }
+    .encode()
 }
 
 /// 构建 CfgQuery 帧并编码
@@ -19,7 +27,8 @@ pub(crate) fn encode_cfg_query(config_type: ConfigType) -> Vec<u8> {
     RawFrame {
         frame_type: FrameType::CfgQuery,
         payload: vec![config_type as u8],
-    }.encode()
+    }
+    .encode()
 }
 
 /// 构建 CfgQueryAll 帧并编码
@@ -27,13 +36,17 @@ pub(crate) fn encode_cfg_query_all() -> Vec<u8> {
     RawFrame {
         frame_type: FrameType::CfgQueryAll,
         payload: vec![],
-    }.encode()
+    }
+    .encode()
 }
 
 /// 解码原始帧数据并分发为 DriverEvent
 ///
 /// 返回 `None` 表示应 continue（未知帧、解码失败），`Some(event)` 表示需要分发的事件。
-pub(crate) fn decode_and_dispatch(frame_data: &[u8], state: &Arc<DriverState>) -> Option<DriverEvent> {
+pub(crate) fn decode_and_dispatch(
+    frame_data: &[u8],
+    state: &Arc<DriverState>,
+) -> Option<DriverEvent> {
     let raw_frame = match RawFrame::decode(frame_data) {
         Ok((frame, _)) => frame,
         Err(e) => {
@@ -88,6 +101,7 @@ pub(crate) fn decode_and_dispatch(frame_data: &[u8], state: &Arc<DriverState>) -
                 .duration_since(std::time::SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis() as u64;
+            state.update_log(ts, log_msg.clone());
             DriverEvent::Log(ts, log_msg)
         }
         TypedFrame::AckCfgWrite { success } => DriverEvent::AckCfgWrite { success },

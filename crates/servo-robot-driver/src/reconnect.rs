@@ -1,4 +1,11 @@
-//! 重连配置
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 12:50
+
+//! Reconnection configuration
 
 use std::time::Duration;
 
@@ -55,7 +62,8 @@ impl ReconnectConfig {
 
     /// 计算第 n 次重试的等待时间
     pub fn delay_for_retry(&self, retry_count: u32) -> Duration {
-        let delay = self.retry_interval.as_secs_f32() * self.backoff_multiplier.powi(retry_count as i32);
+        let delay =
+            self.retry_interval.as_secs_f32() * self.backoff_multiplier.powi(retry_count as i32);
         let delay = Duration::from_secs_f32(delay);
         delay.min(self.max_retry_interval)
     }

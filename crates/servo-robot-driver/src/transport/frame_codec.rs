@@ -1,7 +1,14 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 12:41
+
 //! 帧编解码器
 
 use crate::error::FrameError;
-use crate::protocol::frame::{RawFrame, FRAME_HEAD};
+use crate::protocol::frame::{FRAME_HEAD, RawFrame};
 
 /// 帧编解码器
 pub struct FrameCodec;
@@ -37,8 +44,7 @@ impl FrameCodec {
         }
 
         // 读取 payload 长度
-        let payload_len =
-            u16::from_le_bytes([buf[header_pos + 2], buf[header_pos + 3]]) as usize;
+        let payload_len = u16::from_le_bytes([buf[header_pos + 2], buf[header_pos + 3]]) as usize;
 
         // 检查是否有完整的帧
         let total_len = 4 + payload_len + 2;

@@ -472,34 +472,6 @@ let success = driver.write_config_sync(Config::PowerServoCurrentLimit(5.0))?;
 | `async` | `tokio` | 启用 AsyncDriver 和异步传输层 |
 | `async,mock` | `tokio`, `rand` | 启用 AsyncMockTransport |
 
-## 模块结构
-
-```
-src/
-├── lib.rs                  # 公共 API 导出
-├── error.rs                # 错误类型
-├── driver.rs               # Driver 主结构（同步）
-├── async_driver.rs         # AsyncDriver [async]
-├── driver_common.rs        # Driver 共享纯逻辑（帧构建、帧解码）
-├── reconnect.rs            # 重连配置
-├── state.rs                # 状态快照
-├── transport/
-│   ├── mod.rs              # Transport / AsyncTransport trait
-│   ├── factory.rs          # TransportFactory
-│   ├── serial.rs           # 串口实现（含 read_frame_from_reader 共用函数）
-│   ├── mock/               # 模拟传输层 [mock]
-│   │   ├── mod.rs
-│   │   ├── mock_core.rs    # Mock 共享内核
-│   │   ├── mock_data.rs    # 模拟数据生成
-│   │   └── async_mock.rs   # 异步模拟 [async,mock]
-│   ├── frame_codec.rs      # 帧编解码器
-│   ├── async_trait.rs      # AsyncTransport [async]
-│   └── async_serial.rs     # 异步串口 [async]
-└── dispatch/
-    ├── mod.rs              # EventBus
-    └── callback.rs         # DriverCallback
-```
-
 ## License
 
 GPL-3.0

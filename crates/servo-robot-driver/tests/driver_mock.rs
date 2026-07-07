@@ -1,13 +1,20 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 15:39
+
 //! Driver 集成测试（使用 MockTransport）
 
 #![cfg(feature = "mock")]
 
+use servo_robot_driver::protocol::battery_state::{BatteryChargeStatus, BatteryState};
 use servo_robot_driver::protocol::config::Config;
 use servo_robot_driver::protocol::config::ConfigType;
-use servo_robot_driver::{Driver, DriverCallback, MockTransport};
 use servo_robot_driver::protocol::imu::ImuData;
 use servo_robot_driver::protocol::power::PowerData;
-use servo_robot_driver::protocol::battery_state::{BatteryState, BatteryChargeStatus};
+use servo_robot_driver::{Driver, DriverCallback, MockTransport};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -120,8 +127,14 @@ fn test_driver_receives_imu_data() {
     assert!(received, "Should receive IMU data within 2 seconds");
 
     let imu = stats.last_imu().unwrap();
-    assert!(imu.accel[2] > 8.0 && imu.accel[2] < 12.0, "Z-axis accel should be ~9.81");
-    assert!(imu.quaternion[0].abs() <= 1.0, "Quaternion should be normalized");
+    assert!(
+        imu.accel[2] > 8.0 && imu.accel[2] < 12.0,
+        "Z-axis accel should be ~9.81"
+    );
+    assert!(
+        imu.quaternion[0].abs() <= 1.0,
+        "Quaternion should be normalized"
+    );
 
     driver.stop().unwrap();
 }
@@ -174,10 +187,18 @@ fn test_driver_query_config_sync() {
     std::thread::sleep(Duration::from_millis(100));
 
     let result = driver.query_config_sync(ConfigType::PowerServoCurrentLimit);
-    assert!(result.is_ok(), "Config query should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Config query should succeed: {:?}",
+        result.err()
+    );
 
     let config = result.unwrap();
-    assert_eq!(config.value(), 5.0, "Default servo current limit should be 5.0A");
+    assert_eq!(
+        config.value(),
+        5.0,
+        "Default servo current limit should be 5.0A"
+    );
 
     driver.stop().unwrap();
 }
@@ -191,7 +212,11 @@ fn test_driver_query_all_configs_sync() {
     std::thread::sleep(Duration::from_millis(100));
 
     let result = driver.query_all_configs_sync();
-    assert!(result.is_ok(), "Query all configs should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Query all configs should succeed: {:?}",
+        result.err()
+    );
 
     let config = result.unwrap();
     assert_eq!(config.servo_current_limit, 5.0);
@@ -209,7 +234,11 @@ fn test_driver_write_config_value_sync() {
     std::thread::sleep(Duration::from_millis(100));
 
     let result = driver.write_config_sync(Config::PowerServoCurrentLimit(10.0));
-    assert!(result.is_ok(), "Config write should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Config write should succeed: {:?}",
+        result.err()
+    );
     assert!(result.unwrap(), "Config write should be acknowledged");
 
     driver.stop().unwrap();
@@ -223,9 +252,7 @@ fn test_driver_state_snapshot() {
 
     let state = driver.state();
 
-    wait_until(Duration::from_secs(2), || {
-        state.snapshot().imu.is_some()
-    });
+    wait_until(Duration::from_secs(2), || state.snapshot().imu.is_some());
 
     let snap = state.snapshot();
     assert!(snap.connected, "Should be connected");
@@ -252,7 +279,11 @@ fn test_driver_battery_monitoring() {
     let battery = stats.last_battery().unwrap();
     assert!(battery.percentage > 0.0 && battery.percentage <= 100.0);
     assert!(battery.voltage > 12.0 && battery.voltage <= 16.8);
-    assert_eq!(battery.cell_voltages.len(), 4, "Should have 4 cells (4S LiPo)");
+    assert_eq!(
+        battery.cell_voltages.len(),
+        4,
+        "Should have 4 cells (4S LiPo)"
+    );
 
     driver.stop().unwrap();
 }

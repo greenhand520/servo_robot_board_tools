@@ -1,11 +1,18 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/6 21:50
+
 //! Mock 传输层共享内核
 //!
 //! 包含所有模拟状态和逻辑，供 MockTransport 和 AsyncMockTransport 复用。
 
+use super::mock_data::*;
 use crate::protocol::config::{BoardConfigSnapshot, Config, ConfigType};
 use crate::protocol::frame::{FrameType, RawFrame};
 use crate::protocol::log::{LogLevel, LogMessage};
-use super::mock_data::*;
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
@@ -63,7 +70,7 @@ impl MockCore {
     // ═══ 配置 setter ═══
 
     pub fn set_battery_soc(&mut self, percentage: f32) {
-        self.battery.soc = percentage.clamp(0.0, 100.0);
+        self.battery.percentage = percentage.clamp(0.0, 1.0);
     }
 
     pub fn set_initial_attitude(&mut self, roll_deg: f32, pitch_deg: f32, yaw_deg: f32) {
@@ -204,11 +211,16 @@ impl MockCore {
             self.last_event = now;
         }
 
-        // Log ~0.5Hz (2000ms)，随机日志等级，受 tx_log_level 过滤
-        if now.duration_since(self.last_log) >= Duration::from_millis(2000) {
+        // Log ~0.05Hz (20000ms)，随机日志等级，受 tx_log_level 过滤
+        if now.duration_since(self.last_log) >= Duration::from_millis(20000) {
             let level = self.random_log_level();
             if self.should_emit_log(level) {
-                self.push_log(level, "mock.c", "simulate", &format!("random {} log #{}", level, self.frame_count));
+                self.push_log(
+                    level,
+                    "mock.rs",
+                    "simulate",
+                    &format!("random {} log #{}", level, self.frame_count),
+                );
             }
             self.last_log = now;
         }
@@ -250,7 +262,12 @@ impl MockCore {
                                 payload: config.to_bytes(),
                             };
                             self.priority_queue.push_back(ack.encode());
-                            self.push_log(LogLevel::Info, "config.c", "handle_query", &format!("queried {:?}", ct));
+                            self.push_log(
+                                LogLevel::Info,
+                                "config.rs",
+                                "handle_query",
+                                &format!("queried {:?}", ct),
+                            );
                         }
                     }
                 }
@@ -260,7 +277,12 @@ impl MockCore {
                         payload: self.config.to_bytes(),
                     };
                     self.priority_queue.push_back(ack.encode());
-                    self.push_log(LogLevel::Info, "config.c", "handle_query", "queried all configs");
+                    self.push_log(
+                        LogLevel::Info,
+                        "config.rs",
+                        "handle_query",
+                        "queried all configs",
+                    );
                 }
                 FrameType::CfgWrite => {
                     if let Ok(config) = Config::from_bytes(&raw.payload) {
@@ -270,7 +292,14 @@ impl MockCore {
                             payload: vec![1],
                         };
                         self.priority_queue.push_back(ack.encode());
-                        self.push_log(LogLevel::Info, "config.c", "handle_write", &format!("config updated: {:?}", config));
+                        // 发布更新后的全量配置（模拟 STM32 行为）
+                        self.publish_config();
+                        self.push_log(
+                            LogLevel::Info,
+                            "config.rs",
+                            "handle_write",
+                            &format!("config updated: {:?}", config),
+                        );
                     }
                 }
                 _ => {}
@@ -295,6 +324,15 @@ impl MockCore {
 
     // ═══ 配置管理 ═══
 
+    /// 发布当前全量配置帧（模拟 STM32 在配置变更后主动上报）
+    fn publish_config(&mut self) {
+        let frame = RawFrame {
+            frame_type: FrameType::Config,
+            payload: self.config.to_bytes(),
+        };
+        self.rx_queue.push_back(frame.encode());
+    }
+
     fn get_config_value(&self, ct: ConfigType) -> f32 {
         match ct {
             ConfigType::PowerServoCurrentLimit => self.config.servo_current_limit,
@@ -306,6 +344,10 @@ impl MockCore {
             ConfigType::ChargeStopVoltage => self.config.charge_stop_voltage,
             ConfigType::ChargeStopSoc => self.config.charge_stop_percentage,
             ConfigType::TxLogLevel => self.config.tx_log_level as u8 as f32,
+            ConfigType::SwitchServoPower => self.config.power_servo_on as u8 as f32,
+            ConfigType::Switch5VPower => self.config.power_5v_on as u8 as f32,
+            ConfigType::SwitchCharge => self.config.charge_on as u8 as f32,
+            ConfigType::SwitchBatExtOut => self.config.bat_ext_out_on as u8 as f32,
             _ => 0.0,
         }
     }
@@ -321,7 +363,11 @@ impl MockCore {
             Config::ChargeStopVoltage(v) => self.config.charge_stop_voltage = v,
             Config::ChargeStopSoc(v) => self.config.charge_stop_percentage = v,
             Config::TxLogLevel(level) => self.config.tx_log_level = level,
-            _ => {}
+            Config::SwitchPowerServo(on) => self.config.power_servo_on = on,
+            Config::SwitchPower5V(on) => self.config.power_5v_on = on,
+            Config::SwitchCharge(on) => self.config.charge_on = on,
+            Config::SwitchBatExtOut(on) => self.config.bat_ext_out_on = on,
+            Config::Reset | Config::Shutdown => {}
         }
     }
 }

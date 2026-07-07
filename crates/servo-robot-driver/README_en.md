@@ -467,34 +467,6 @@ let success = driver.write_config_sync(Config::PowerServoCurrentLimit(5.0))?;
 | `async` | `tokio` | Enable AsyncDriver and async transport |
 | `async,mock` | `tokio`, `rand` | Enable AsyncMockTransport |
 
-## Module Structure
-
-```
-src/
-├── lib.rs                  # Public API exports
-├── error.rs                # Error types
-├── driver.rs               # Driver (sync)
-├── async_driver.rs         # AsyncDriver [async]
-├── driver_common.rs        # Shared logic (frame encode/decode)
-├── reconnect.rs            # Reconnect config
-├── state.rs                # State snapshot
-├── transport/
-│   ├── mod.rs              # Transport / AsyncTransport trait
-│   ├── factory.rs          # TransportFactory
-│   ├── serial.rs           # Serial impl (with read_frame_from_reader)
-│   ├── mock/               # Mock transport [mock]
-│   │   ├── mod.rs
-│   │   ├── mock_core.rs    # Mock shared core
-│   │   ├── mock_data.rs    # Simulated data generation
-│   │   └── async_mock.rs   # Async mock [async,mock]
-│   ├── frame_codec.rs      # Frame codec
-│   ├── async_trait.rs      # AsyncTransport [async]
-│   └── async_serial.rs     # Async serial [async]
-└── dispatch/
-    ├── mod.rs              # EventBus
-    └── callback.rs         # DriverCallback
-```
-
 ## License
 
 GPL-3.0

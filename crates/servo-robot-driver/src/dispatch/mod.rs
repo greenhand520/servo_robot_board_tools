@@ -1,3 +1,10 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 12:39
+
 //! 事件分发系统
 
 pub mod callback;
@@ -23,7 +30,9 @@ pub enum DriverEvent {
     Log(u64, crate::protocol::log::LogMessage),
 
     // ═══ 应答事件 ═══
-    AckCfgWrite { success: bool },
+    AckCfgWrite {
+        success: bool,
+    },
     AckCfgQuery(crate::protocol::config::Config),
     AckCfgQueryAll(crate::protocol::config::BoardConfigSnapshot),
 
@@ -91,12 +100,10 @@ impl EventBus {
 
     /// 接收 ACK 事件（带超时）
     pub fn recv_ack_timeout(&self, timeout: Duration) -> Result<DriverEvent, DriverError> {
-        self.ack_rx
-            .recv_timeout(timeout)
-            .map_err(|e| match e {
-                flume::RecvTimeoutError::Timeout => DriverError::Timeout,
-                flume::RecvTimeoutError::Disconnected => DriverError::TransportClosed,
-            })
+        self.ack_rx.recv_timeout(timeout).map_err(|e| match e {
+            flume::RecvTimeoutError::Timeout => DriverError::Timeout,
+            flume::RecvTimeoutError::Disconnected => DriverError::TransportClosed,
+        })
     }
 
     /// 接收一个事件（阻塞）

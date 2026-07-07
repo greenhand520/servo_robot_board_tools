@@ -1,3 +1,10 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 20:24
+
 //! 基于 tokio 的异步串口传输层实现
 
 use crate::error::DriverError;
@@ -31,7 +38,11 @@ impl TokioSerialTransport {
 
     /// 打开串口
     pub fn open(port_name: &str, baud_rate: u32) -> Result<Self, DriverError> {
-        log::info!("Opening async serial port: {} @ {} baud", port_name, baud_rate);
+        log::info!(
+            "Opening async serial port: {} @ {} baud",
+            port_name,
+            baud_rate
+        );
         let port = serialport::new(port_name, baud_rate)
             .timeout(Duration::from_millis(100))
             .open()?;
@@ -45,7 +56,9 @@ impl TokioSerialTransport {
 
 #[cfg(feature = "async")]
 impl AsyncTransport for TokioSerialTransport {
-    fn read_frame(&mut self) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, DriverError>> + Send + '_>> {
+    fn read_frame(
+        &mut self,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, DriverError>> + Send + '_>> {
         let port = self.port.clone();
         let port_name = self.port_name.clone();
 
@@ -59,7 +72,10 @@ impl AsyncTransport for TokioSerialTransport {
         })
     }
 
-    fn write_frame(&mut self, frame: &[u8]) -> Pin<Box<dyn Future<Output = Result<(), DriverError>> + Send + '_>> {
+    fn write_frame(
+        &mut self,
+        frame: &[u8],
+    ) -> Pin<Box<dyn Future<Output = Result<(), DriverError>> + Send + '_>> {
         let port = self.port.clone();
         let frame = frame.to_vec();
         let port_name = self.port_name.clone();

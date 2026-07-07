@@ -1,3 +1,10 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 12:35
+
 //! 传输层抽象
 
 pub mod factory;
@@ -7,9 +14,9 @@ pub mod mock;
 pub mod serial;
 
 #[cfg(feature = "async")]
-pub mod async_trait;
-#[cfg(feature = "async")]
 pub mod async_serial;
+#[cfg(feature = "async")]
+pub mod async_trait;
 
 use crate::error::DriverError;
 
@@ -34,8 +41,8 @@ pub use mock::MockTransport;
 
 // 重导出异步传输层
 #[cfg(feature = "async")]
-pub use async_trait::{AsyncTransport, AsyncTransportFactory, FnAsyncTransportFactory};
-#[cfg(feature = "async")]
 pub use async_serial::TokioSerialTransport;
+#[cfg(feature = "async")]
+pub use async_trait::{AsyncTransport, AsyncTransportFactory, FnAsyncTransportFactory};
 #[cfg(all(feature = "mock", feature = "async"))]
 pub use mock::AsyncMockTransport;
