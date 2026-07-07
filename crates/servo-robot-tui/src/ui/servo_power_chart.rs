@@ -1,19 +1,38 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/6 21:19
+
 //! 舵机电源折线图 + 底部数据叠加
 
+use crate::app::App;
+use crate::ui::colors;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Block, Borders, Chart, Dataset, GraphType, Paragraph};
-use crate::app::App;
-use crate::ui::colors;
 
 pub fn render(f: &mut Frame, area: Rect, app: &App) {
     let current_data: Vec<(f64, f64)> = app.power_chart.current.data.iter().cloned().collect();
 
-    let x_min = app.power_chart.current.data.front().map(|(t, _)| *t).unwrap_or(0.0);
-    let x_max = app.power_chart.current.data.back().map(|(t, _)| *t).unwrap_or(60.0);
+    let x_min = app
+        .power_chart
+        .current
+        .data
+        .front()
+        .map(|(t, _)| *t)
+        .unwrap_or(0.0);
+    let x_max = app
+        .power_chart
+        .current
+        .data
+        .back()
+        .map(|(t, _)| *t)
+        .unwrap_or(60.0);
 
     let y_min = 0.0;
     let y_max = 25.0;
@@ -39,9 +58,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
                 .title("Time (s)")
                 .style(Style::default().fg(Color::Gray))
                 .bounds([x_min.max(x_max - 60.0), x_max])
-                .labels(vec![
-                    Span::styled("0", Style::default().fg(Color::Gray)),
-                ]),
+                .labels(vec![Span::styled("0", Style::default().fg(Color::Gray))]),
         )
         .y_axis(
             Axis::default()
@@ -72,7 +89,12 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         let config = app.config.as_ref();
         let (voltage, current, power, temp) = if let Some(p) = &app.current_data.power {
             let power = p.servo_voltage * p.servo_current;
-            let temp = app.current_data.thermal.as_ref().map(|t| t.temp_servo_power).unwrap_or(0.0);
+            let temp = app
+                .current_data
+                .thermal
+                .as_ref()
+                .map(|t| t.temp_servo_power)
+                .unwrap_or(0.0);
             (p.servo_voltage, p.servo_current, power, temp)
         } else {
             (0.0, 0.0, 0.0, 0.0)
@@ -83,22 +105,29 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
         let current_color = colors::get_power_color(current, current_limit);
         let temp_color = colors::get_temp_color(temp, temp_limit);
 
-        let text = vec![
-            Line::from(vec![
-                Span::styled("⚡ ", Style::default().fg(Color::White)),
-                Span::styled("V:", Style::default().fg(Color::White)),
-                Span::styled(format!("{:>4.1}V", voltage), Style::default().fg(Color::Cyan)),
-                Span::raw("  "),
-                Span::styled("I:", Style::default().fg(Color::White)),
-                Span::styled(format!("{:>5.1}A", current), Style::default().fg(current_color)),
-                Span::raw("  "),
-                Span::styled("P:", Style::default().fg(Color::White)),
-                Span::styled(format!("{:>6.1}W", power), Style::default().fg(Color::Yellow)),
-                Span::raw("  "),
-                Span::styled("T:", Style::default().fg(Color::White)),
-                Span::styled(format!("{:>5.1}°C", temp), Style::default().fg(temp_color)),
-            ]),
-        ];
+        let text = vec![Line::from(vec![
+            Span::styled("⚡ ", Style::default().fg(Color::White)),
+            Span::styled("V:", Style::default().fg(Color::White)),
+            Span::styled(
+                format!("{:>4.1}V", voltage),
+                Style::default().fg(Color::Cyan),
+            ),
+            Span::raw("  "),
+            Span::styled("I:", Style::default().fg(Color::White)),
+            Span::styled(
+                format!("{:>5.1}A", current),
+                Style::default().fg(current_color),
+            ),
+            Span::raw("  "),
+            Span::styled("P:", Style::default().fg(Color::White)),
+            Span::styled(
+                format!("{:>6.1}W", power),
+                Style::default().fg(Color::Yellow),
+            ),
+            Span::raw("  "),
+            Span::styled("T:", Style::default().fg(Color::White)),
+            Span::styled(format!("{:>5.1}°C", temp), Style::default().fg(temp_color)),
+        ])];
 
         let paragraph = Paragraph::new(text);
         f.render_widget(paragraph, inner);

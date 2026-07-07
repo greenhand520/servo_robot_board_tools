@@ -1,8 +1,16 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 16:14
+
 //! App 状态管理
 
-use crate::data_source::{DataSource, DataSnapshot};
-use servo_robot_driver::protocol::config::Config;
-use servo_robot_driver::protocol::config::ConfigType;
+use crate::data_source::{DataSnapshot, DataSource};
+use servo_robot_driver::protocol::config::*;
+use servo_robot_driver::protocol::event::{BoardEvent, EventLog};
+use servo_robot_driver::protocol::log::LogLevel as ProtocolLogLevel;
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -113,7 +121,7 @@ impl ConfigEditor {
         }
     }
 
-    pub fn update_from_config(&mut self, config: &servo_robot_driver::protocol::config::BoardConfigSnapshot) {
+    pub fn update_from_config(&mut self, config: &BoardConfigSnapshot) {
         self.configs[0].1 = config.servo_current_limit;
         self.configs[1].1 = config.servo_temp_limit;
         self.configs[2].1 = config.temp_5v_limit;
@@ -149,7 +157,7 @@ pub struct App {
     pub current_data: DataSnapshot,
     pub power_chart: PowerChart,
     pub battery_chart: BatteryChart,
-    pub config: Option<servo_robot_driver::protocol::config::BoardConfigSnapshot>,
+    pub config: Option<BoardConfigSnapshot>,
     pub config_received: bool,
     pub last_config_query: Instant,
     pub config_editor: ConfigEditor,
@@ -157,11 +165,15 @@ pub struct App {
     pub show_config_query: bool,
     pub should_quit: bool,
     pub start_time: Instant,
-    pub log_state: tui_logger::TuiWidgetState,
     pub log_focus: bool,
-    pub event_log: VecDeque<String>,
-    pub protection_event_count: u64,
-    pub local_tx_log_level: servo_robot_driver::protocol::log::LogLevel,
+    pub log_scroll: usize, // 0 = 最新（底部），>0 = 向上偏移行数
+    pub log_level_filter: ProtocolLogLevel, // 显示 >= 此等级的日志
+    pub logs: Vec<servo_robot_driver::LogEntry>,
+    pub event_log: VecDeque<EventLog>,
+    pub event_scroll: usize,  // 0 = 最新（底部），>0 = 向上偏移条数
+    // pub protection_event_count: u64,
+    pub last_board_event: BoardEvent,
+    pub local_tx_log_level: ProtocolLogLevel,
 }
 
 impl App {
@@ -183,11 +195,15 @@ impl App {
             show_config_query: false,
             should_quit: false,
             start_time: Instant::now(),
-            log_state: tui_logger::TuiWidgetState::new(),
             log_focus: false,
+            log_scroll: 0,
+            log_level_filter: ProtocolLogLevel::Debug,
+            logs: Vec::new(),
             event_log: VecDeque::new(),
-            protection_event_count: 0,
-            local_tx_log_level: servo_robot_driver::protocol::log::LogLevel::Info,
+            event_scroll: 0,
+            // protection_event_count: 0,
+            last_board_event: BoardEvent::default(),
+            local_tx_log_level: ProtocolLogLevel::Info,
         }
     }
 
@@ -197,10 +213,19 @@ impl App {
         self.confirm_dialog.message = match &action {
             PendingAction::Reset => "确认要复位设备吗？".to_string(),
             PendingAction::Shutdown => "确认要关机吗？".to_string(),
-            PendingAction::SwitchServoPower(on) => format!("确认要{}舵机电源吗？", if *on { "开启" } else { "关闭" }),
-            PendingAction::Switch5VPower(on) => format!("确认要{}5V电源吗？", if *on { "开启" } else { "关闭" }),
-            PendingAction::SwitchCharge(on) => format!("确认要{}充电吗？", if *on { "开启" } else { "关闭" }),
-            PendingAction::SwitchBatExtOut(on) => format!("确认要{}电池额外输出吗？", if *on { "开启" } else { "关闭" }),
+            PendingAction::SwitchServoPower(on) => {
+                format!("确认要{}舵机电源吗？", if *on { "开启" } else { "关闭" })
+            }
+            PendingAction::Switch5VPower(on) => {
+                format!("确认要{}5V电源吗？", if *on { "开启" } else { "关闭" })
+            }
+            PendingAction::SwitchCharge(on) => {
+                format!("确认要{}充电吗？", if *on { "开启" } else { "关闭" })
+            }
+            PendingAction::SwitchBatExtOut(on) => format!(
+                "确认要{}电池额外输出吗？",
+                if *on { "开启" } else { "关闭" }
+            ),
         };
         self.confirm_dialog.pending_action = Some(action);
     }
@@ -211,10 +236,14 @@ impl App {
             match action {
                 PendingAction::Reset => self.write_config(Config::Reset),
                 PendingAction::Shutdown => self.write_config(Config::Shutdown),
-                PendingAction::SwitchServoPower(on) => self.write_config(Config::SwitchServoPower(on)),
-                PendingAction::Switch5VPower(on) => self.write_config(Config::Switch5VPower(on)),
+                PendingAction::SwitchServoPower(on) => {
+                    self.write_config(Config::SwitchPowerServo(on))
+                }
+                PendingAction::Switch5VPower(on) => self.write_config(Config::SwitchPower5V(on)),
                 PendingAction::SwitchCharge(on) => self.write_config(Config::SwitchCharge(on)),
-                PendingAction::SwitchBatExtOut(on) => self.write_config(Config::SwitchBatExtOut(on)),
+                PendingAction::SwitchBatExtOut(on) => {
+                    self.write_config(Config::SwitchBatExtOut(on))
+                }
             }
         }
         self.confirm_dialog.active = false;
@@ -233,14 +262,24 @@ impl App {
         let time = self.start_time.elapsed().as_secs_f64();
 
         if let Some(power) = &snapshot.power {
-            self.power_chart.voltage.push(time, power.servo_voltage as f64);
-            self.power_chart.current.push(time, power.servo_current as f64);
+            self.power_chart
+                .voltage
+                .push(time, power.servo_voltage as f64);
+            self.power_chart
+                .current
+                .push(time, power.servo_current as f64);
         }
 
         if let Some(battery) = &snapshot.battery {
-            self.battery_chart.voltage.push(time, battery.voltage as f64);
-            self.battery_chart.current.push(time, battery.current as f64);
-            self.battery_chart.power.push(time, (battery.voltage * battery.current) as f64);
+            self.battery_chart
+                .voltage
+                .push(time, battery.voltage as f64);
+            self.battery_chart
+                .current
+                .push(time, battery.current as f64);
+            self.battery_chart
+                .power
+                .push(time, (battery.voltage * battery.current) as f64);
         }
 
         // 更新充电数据（只需要 power 数据）
@@ -254,7 +293,10 @@ impl App {
                     cc.push(time, power.charge_in_current as f64);
                 }
                 if let Some(ref mut cp) = self.battery_chart.charge_power {
-                    cp.push(time, (power.charge_in_voltage * power.charge_in_current) as f64);
+                    cp.push(
+                        time,
+                        (power.charge_in_voltage * power.charge_in_current) as f64,
+                    );
                 }
                 // 充电温度从 thermal 获取
                 if let Some(thermal) = &snapshot.thermal {
@@ -272,39 +314,21 @@ impl App {
             self.config_editor.update_from_config(config);
         }
 
-        // 更新事件日志
+        // 更新事件日志（仅在状态变化时记录）
         if let Some(evt) = &snapshot.event {
-            let flags = evt.protection_flags;
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
 
-            // 统计保护事件数量
-            if !flags.is_empty() {
-                self.protection_event_count += 1;
-
-                // 添加保护事件到日志
-                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::SERVO_OVERCURRENT) {
-                    self.push_event("SERVO_OVERCURRENT".to_string());
-                }
-                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::SERVO_THERMAL) {
-                    self.push_event("SERVO_THERMAL".to_string());
-                }
-                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::DCDC_5V_THERMAL) {
-                    self.push_event("DCDC_5V_THERMAL".to_string());
-                }
-                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::CHARGE_DERATING) {
-                    self.push_event("CHARGE_DERATING".to_string());
-                }
-                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::CHARGE_THERMAL) {
-                    self.push_event("CHARGE_THERMAL".to_string());
-                }
-                if flags.contains(servo_robot_driver::protocol::event::ProtectionFlags::BATTERY_LOW) {
-                    self.push_event("BATTERY_LOW".to_string());
-                }
+            let new_events = evt.diff_events(&self.last_board_event);
+            // self.protection_event_count += new_events.iter()
+            //     .filter(|k| k.category() == servo_robot_driver::protocol::event::EventCategory::Protection)
+            //     .count() as u64;
+            for kind in new_events {
+                self.push_event(EventLog { ts: now_ms, kind });
             }
-
-            // 充电状态变化
-            if evt.charger_connected {
-                self.push_event("CHARGER_CONNECTED".to_string());
-            }
+            self.last_board_event = evt.clone();
         }
 
         // 自动查询配置
@@ -316,18 +340,25 @@ impl App {
             }
         }
 
+        // 更新板级日志（追加新条目）
+        if !snapshot.logs.is_empty() {
+            self.logs = snapshot.logs.clone();
+            // 自动跟踪最新日志（除非用户手动向上滚动）
+            if self.log_scroll == 0 {
+                // 保持在底部
+            }
+        }
+
         self.current_data = snapshot;
     }
 
-    /// 添加事件到日志队列，保持最大3条（底部区域5行，边框2行，可见3行）
-    fn push_event(&mut self, event: String) {
-        if self.event_log.len() >= 3 {
+    /// 添加事件到日志队列，保持最大20条
+    fn push_event(&mut self, event: EventLog) {
+        if self.event_log.len() >= 20 {
             self.event_log.pop_front();
         }
         self.event_log.push_back(event);
     }
-
-    
 
     pub fn write_config(&self, config: Config) {
         self.data_source.write_config(config).ok();

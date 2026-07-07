@@ -1,3 +1,10 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/4 21:21
+
 //! 颜色配置（阈值告警）
 
 use ratatui::style::Color;
@@ -52,21 +59,5 @@ pub fn get_cell_voltage_color(voltage: f32) -> Color {
         Color::Red
     } else {
         Color::Green
-    }
-}
-
-/// 获取保护标志颜色
-pub fn get_protection_color() -> Color {
-    Color::Red
-}
-
-/// 获取充电状态颜色
-pub fn get_charge_status_color(status: &servo_robot_driver::protocol::battery_state::BatteryChargeStatus) -> Color {
-    use servo_robot_driver::protocol::battery_state::BatteryChargeStatus;
-    match status {
-        BatteryChargeStatus::Charging => Color::Green,
-        BatteryChargeStatus::Full => Color::Cyan,
-        BatteryChargeStatus::Discharging => Color::Yellow,
-        _ => Color::White,
     }
 }

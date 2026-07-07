@@ -6,8 +6,8 @@ edition.workspace = true
 [dependencies]
 ratatui = "0.30"
 crossterm = "0.29"
-servo-robot-driver = { path = "../servo-robot-driver", features = ["mock"] }
-log = { workspace = true }
+servo-robot-driver = { path = "../servo-robot-driver" }
+log = {workspace = true}
 tui-logger = "0.18"
 
 # ROS2 依赖（可选）
@@ -17,4 +17,5 @@ servo_robot_board_interface = { path = "${SERVO_ROBOT_BOARD_WS}/install/servo_ro
 
 [features]
 default = []
+mock = ["servo-robot-driver/mock"]
 ros2 = ["rclrs", "sensor_msgs", "servo_robot_board_interface"]

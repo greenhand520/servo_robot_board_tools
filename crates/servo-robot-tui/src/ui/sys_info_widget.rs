@@ -1,12 +1,19 @@
+//! # Authors
+//! greenhand520
+//! # Since
+//! version: 0.1.0
+//! # Date
+//! 2026/7/6 21:49
+
 //! STM32 系统信息（3列布局）
 
+use crate::app::App;
+use crate::ui::colors;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use crate::app::App;
-use crate::ui::colors;
 
 /// 列宽定义
 const COL1_W: usize = 16;
@@ -40,8 +47,16 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
     if let Some(sys) = system {
         // 标题行
         text.push(Line::from(vec![
-            Span::styled("MCU", Style::default().fg(Color::Blue).add_modifier(ratatui::style::Modifier::BOLD)),
-            Span::styled(format!(" (0x{:04X} 0x{:08X})", sys.device_id, sys.uid), Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                "MCU",
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" (0x{:04X} 0x{:08X})", sys.device_id, sys.uid),
+                Style::default().fg(Color::DarkGray),
+            ),
         ]));
 
         // 丢包率计算
@@ -73,7 +88,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
             let pd_i = sys.pd_request_current as f32 / 1000.0;
             format!("{:.0}V/{:.0}A", pd_v, pd_i)
         } else {
-            "NAN/NAN".to_string()
+            "NaN/NaN".to_string()
         };
 
         // 错误计数颜色
@@ -81,58 +96,123 @@ pub fn render(f: &mut Frame, area: Rect, app: &App) {
 
         // Row 1: MCU温度 | CPU占有率 | TX
         text.push(Line::from(vec![
-            cell(&format!("MCU: {:.1}°C", mcu_temp), COL1_W, Style::default().fg(mcu_temp_color)),
+            cell(
+                &format!("MCU: {:.1}°C", mcu_temp),
+                COL1_W,
+                Style::default().fg(mcu_temp_color),
+            ),
             spacer(),
-            cell(&format!("CPU:  {}%", sys.cpu_usage_percent), COL2_W, Style::default().fg(Color::Green)),
+            cell(
+                &format!("CPU:  {}%", sys.cpu_usage_percent),
+                COL2_W,
+                Style::default().fg(Color::Green),
+            ),
             spacer(),
-            cell(&format!("TX:     {}", sys.frames_sent_total), COL3_W, Style::default().fg(Color::Yellow)),
+            cell(
+                &format!("TX:     {}", sys.frames_sent_total),
+                COL3_W,
+                Style::default().fg(Color::Yellow),
+            ),
         ]));
         // Row 2: 5V温度 | I2C错误 | Parsed
         text.push(Line::from(vec![
-            cell(&format!("5V:  {:.1}°C", temp_5v), COL1_W, Style::default().fg(temp_5v_color)),
+            cell(
+                &format!("5V:  {:.1}°C", temp_5v),
+                COL1_W,
+                Style::default().fg(temp_5v_color),
+            ),
             spacer(),
-            cell(&format!("I2C:  {}", sys.i2c_error_count), COL2_W, Style::default().fg(err_color(sys.i2c_error_count))),
+            cell(
+                &format!("I2C:  {}", sys.i2c_error_count),
+                COL2_W,
+                Style::default().fg(err_color(sys.i2c_error_count)),
+            ),
             spacer(),
-            cell(&format!("Parsed: {}", frames_parsed), COL3_W, Style::default().fg(Color::Cyan)),
+            cell(
+                &format!("Parsed: {}", frames_parsed),
+                COL3_W,
+                Style::default().fg(Color::Cyan),
+            ),
         ]));
         // Row 3: Heap | SPI错误 | Loss
         text.push(Line::from(vec![
-            cell(&format!("Heap: {}KB", sys.free_heap_kb), COL1_W, Style::default().fg(Color::Cyan)),
+            cell(
+                &format!("Heap: {}KB", sys.free_heap_kb),
+                COL1_W,
+                Style::default().fg(Color::Cyan),
+            ),
             spacer(),
-            cell(&format!("SPI:  {}", sys.spi_error_count), COL2_W, Style::default().fg(err_color(sys.spi_error_count))),
+            cell(
+                &format!("SPI:  {}", sys.spi_error_count),
+                COL2_W,
+                Style::default().fg(err_color(sys.spi_error_count)),
+            ),
             spacer(),
-            cell(&format!("Loss:   {:.1}%", loss_rate), COL3_W, Style::default().fg(loss_color)),
+            cell(
+                &format!("Loss:   {:.1}%", loss_rate),
+                COL3_W,
+                Style::default().fg(loss_color),
+            ),
         ]));
         // Row 4: Stack | UART错误 | 运行时间
         text.push(Line::from(vec![
-            cell(&format!("Stack:{:3.0}KB", sys.stack_watermark_min_kb), COL1_W, Style::default().fg(Color::Cyan)),
+            cell(
+                &format!("Stack:{:3.0}KB", sys.stack_watermark_min_kb),
+                COL1_W,
+                Style::default().fg(Color::Cyan),
+            ),
             spacer(),
-            cell(&format!("UART: {}", sys.uart_error_count), COL2_W, Style::default().fg(err_color(sys.uart_error_count))),
+            cell(
+                &format!("UART: {}", sys.uart_error_count),
+                COL2_W,
+                Style::default().fg(err_color(sys.uart_error_count)),
+            ),
             spacer(),
-            cell(&format!("Run:    {}", uptime_str), COL3_W, Style::default().fg(Color::White)),
+            cell(
+                &format!("Run:    {}", uptime_str),
+                COL3_W,
+                Style::default().fg(Color::White),
+            ),
         ]));
         // Row 5: PD | USB错误
         text.push(Line::from(vec![
-            cell(&format!("PD:  {}", pd_str), COL1_W, Style::default().fg(Color::White)),
+            cell(
+                &format!("PD:  {}", pd_str),
+                COL1_W,
+                Style::default().fg(Color::White),
+            ),
             spacer(),
-            cell(&format!("USB:  {}", sys.usb_error_count), COL2_W, Style::default().fg(err_color(sys.usb_error_count))),
+            cell(
+                &format!("USB:  {}", sys.usb_error_count),
+                COL2_W,
+                Style::default().fg(err_color(sys.usb_error_count)),
+            ),
+            spacer(),
+            cell(
+                &format!("FVer:  {}", sys.firmware_version),
+                COL2_W,
+                Style::default().fg(Color::Green),
+            ),
         ]));
     } else {
-        text.push(Line::from(vec![
-            Span::styled("STM32", Style::default().fg(Color::Blue).add_modifier(ratatui::style::Modifier::BOLD)),
-        ]));
-        text.push(Line::from(vec![
-            Span::styled("Waiting data...", Style::default().fg(Color::DarkGray)),
-        ]));
+        text.push(Line::from(vec![Span::styled(
+            "STM32",
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        )]));
+        text.push(Line::from(vec![Span::styled(
+            "Waiting data...",
+            Style::default().fg(Color::DarkGray),
+        )]));
     }
 
-    let paragraph = Paragraph::new(text)
-        .block(
-            Block::default()
-                .title("📊System Info")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Blue)),
-        );
+    let paragraph = Paragraph::new(text).block(
+        Block::default()
+            .title("📊System Info")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Blue)),
+    );
 
     f.render_widget(paragraph, area);
 }
