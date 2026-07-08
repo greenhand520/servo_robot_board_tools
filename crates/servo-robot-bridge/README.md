@@ -1,27 +1,25 @@
 # servo-robot-bridge
 
-[English](README_en.md) | 简体中文
+ROS2 bridge node that publishes servo-robot-driver data as ROS2 topics and exposes ROS2 services for device control.
 
-ROS2 桥接节点，将 servo-robot-driver 的数据发布为 ROS2 话题，提供 ROS2 服务控制设备。
+## Quick Start
 
-## 快速开始
-
-### 1. 安装 ROS2 Rust
+### 1. Install ROS2 Rust
 
 ```bash
-# 1. 安装 Rust(可选)
+# 1. Install Rust(Optiolal)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# 2. 克隆 ros2_rust
+# 2. Clone ros2_rust
 mkdir -p ~/ros_pkgs/ros2_rust_ws/src
 cd ~/ros_pkgs/ros2_rust_ws/src
 git clone https://github.com/ros2-rust/ros2_rust.git
 vcs import < ros2_rust/ros2_rust_humble.repos
 
-# 3. 构建
+# 3. Build
 cd ~/ros_pkgs/ros2_rust_ws
 colcon build
-# 或者 colcon build --cmake-args -Wno-dev  
+# or colcon build --cmake-args -Wno-dev  
 ```
 
 ### 2. 安装 Servo Robot Board Interface
@@ -33,80 +31,80 @@ git clone https://github.com/greenhand520/servo_robot_board_interface.git
 
 cd ~/ros_pkgs/servo_robot_board_ws/
 colcon build
-# 或者 colcon build --cmake-args -Wno-dev  
+# or colcon build --cmake-args -Wno-dev  
 ```
 
-### 3. 启用 ROS2 Bridge
+### 2. Enable ROS2 Bridge
 
 ```bash
-# 使用默认路径
+# Default paths
 source scripts/init_workspace.sh --ros2_support
 
-# 或指定路径
+# Custom paths
 source scripts/init_workspace.sh --ros2_support ~/ros_pkgs/ros2_rust_ws ~/ros_pkgs/servo_robot_board_ws
 ```
 
-脚本会：
-- 生成 `scripts/.env` 环境变量文件
-- 从模板生成 `Cargo.toml` 和 `build.rs`
-- 启用 workspace 中的 bridge crate
+The script will:
+- Generate `scripts/.env` environment variable file
+- Generate `Cargo.toml` and `build.rs` from templates
+- Enable the bridge crate in the workspace
 
-### 4. 设置 IDE 环境变量（可选）
+### 3. Set IDE Environment Variables (Optional)
 
-**RustRover / CLion 用户**：需要将 `scripts/.env` 中的变量添加到 Rust 环境变量：
+**RustRover / CLion users**: Add variables from `scripts/.env` to Rust environment variables:
 
-1. 打开 **设置 → Rust → 环境变量**
-2. 添加以下变量：
+1. Open **Settings → Rust → Environment Variables**
+2. Add the following:
    - `ROS_DISTRO=humble`
    - `RUST_BACKTRACE=full`
-   - `AMENT_PREFIX_PATH=...`（从 `scripts/.env` 复制）
-   - `LD_LIBRARY_PATH=...`（从 `scripts/.env` 复制）
+   - `AMENT_PREFIX_PATH=...` (copy from `scripts/.env`)
+   - `LD_LIBRARY_PATH=...` (copy from `scripts/.env`)
 
-### 5. 构建和运行
+### 4. Build and Run
 
 ```bash
-# 构建（连接真实串口）
+# Build (real serial port)
 cargo build -p servo-robot-bridge
 
-# 构建（使用 MockTransport，无需硬件）
+# Build (MockTransport, no hardware needed)
 cargo build -p servo-robot-bridge --features mock
 
-# 运行（真实串口）
+# Run (real serial port)
 cargo run -p servo-robot-bridge
 
-# 运行（MockTransport，无需硬件即可开发测试）
+# Run (MockTransport, no hardware needed for dev/test)
 cargo run -p servo-robot-bridge --features mock
 
-# 运行（指定串口参数）
+# Run with custom serial params
 cargo run -p servo-robot-bridge -- --ros-args -p port:=/dev/ttyUSB1 -p baud_rate:=921600
 
-# 使用 launch 文件运行
+# Run with launch file
 ros2 launch crates/servo-robot-bridge/launch/bridge.launch.py
 
-# 使用 launch 文件并覆盖参数
+# Run with launch file and override params
 ros2 launch crates/servo-robot-bridge/launch/bridge.launch.py port:=/dev/ttyUSB1 baud_rate:=921600
 ```
 
-> **Mock 模式**：启用 `mock` feature 后，驱动使用 `MockTransport` 模拟 STM32 数据（IMU、Battery 等），无需连接硬件即可开发和测试 ROS2 话题/服务。
+> **Mock mode**: With `mock` feature enabled, the driver uses `MockTransport` to simulate STM32 data (IMU 100Hz, Battery 10Hz, etc.) — no hardware needed for developing and testing ROS2 topics/services.
 
-## 参数
+## Parameters
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `port` | `string` | `/dev/ttyUSB0` | 串口设备路径 |
-| `baud_rate` | `int` | `115200` | 串口波特率 |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `port` | `string` | `/dev/ttyUSB0` | Serial port device path |
+| `baud_rate` | `int` | `115200` | Serial baud rate |
 
-### 参数设置方式
+### Setting Parameters
 
-#### 1. 命令行
+#### 1. Command Line
 
 ```bash
 ros2 run servo-robot-bridge servo_robot_board_bridge --ros-args -p port:=/dev/ttyUSB1 -p baud_rate:=921600
 ```
 
-#### 2. YAML 参数文件
+#### 2. YAML Parameter File
 
-编辑 `config/servo_robot_bridge.yaml`：
+Edit `config/servo_robot_bridge.yaml`:
 
 ```yaml
 servo_robot_board_bridge:
@@ -115,123 +113,207 @@ servo_robot_board_bridge:
     baud_rate: 115200
 ```
 
-然后通过 launch 文件加载：
+Then load via launch file:
 
 ```bash
 ros2 launch crates/servo-robot-bridge/launch/bridge.launch.py
 ```
 
-#### 3. 运行时查看和修改
+#### 3. Runtime Inspection
 
 ```bash
-# 查看所有参数
+# List all parameters
 ros2 param list servo_robot_board_bridge
 
-# 查看参数值
+# Get parameter values
 ros2 param get servo_robot_board_bridge port
 ros2 param get servo_robot_board_bridge baud_rate
 ```
 
-## 话题和服务
+## Topics and Services
 
-### 话题发布
+### Published Topics
 
-| 话题 | 消息类型 | 说明 |
-|------|---------|------|
-| `/robot/board/imu` | `sensor_msgs/Imu` | IMU 数据（四元数、角速度、加速度） |
-| `/robot/board/power` | `BoardPower` | 电源数据（舵机/充电/电池电压电流） |
-| `/robot/board/thermal` | `BoardThermal` | 温度数据（舵机/5V/MCU/充电/电池） |
-| `/robot/board/system` | `BoardSystem` | 系统信息（设备ID、运行时间、错误计数、PD电压电流、固件版本） |
-| `/robot/board/event` | `BoardEvent` | 事件（充电状态、状态变化标志、保护标志、错误标志） |
-| `/robot/board/config` | `BoardConfig` | 配置快照（所有配置参数 + 开关状态 + 日志等级） |
-| `/robot/board/battery` | `sensor_msgs/BatteryState` | 电池状态（电压、电流、电量百分比、电芯电压温度） |
-| `/robot/board/log` | `rcl_interfaces/Log` | 板级日志（时间戳、等级、文件名、函数名、消息内容） |
+| Topic | Message Type | Description |
+|-------|-------------|-------------|
+| `/robot/board/imu` | `sensor_msgs/Imu` | IMU data (quaternion, angular velocity, acceleration) |
+| `/robot/board/power` | `BoardPower` | Power data (servo/charge/battery voltage & current in mV/mA) |
+| `/robot/board/thermal` | `BoardThermal` | Temperature data (servo/5V/MCU/charge/battery in °C) |
+| `/robot/board/system` | `BoardSystem` | System info (device ID, uptime, error counts, PD voltage/current, firmware version) |
+| `/robot/board/event` | `BoardEvent` | Events (charge state, state change flags, protection flags, error flags) |
+| `/robot/board/config` | `BoardConfig` | Config snapshot (all config params + switch states + log level) |
+| `/robot/board/battery` | `sensor_msgs/BatteryState` | Battery state (voltage, current, percentage, cell voltage & temperature) |
+| `/robot/board/log` | `rcl_interfaces/Log` | Board logs (timestamp, level, file name, function name, message) |
 
-### 服务
+### Subscribed Topics
 
-| 服务 | 服务类型 | 说明 |
-|------|---------|------|
-| `/robot/board/query_config` | `BoardQueryConfig` | 查询单个配置 |
-| `/robot/board/query_all_config` | `BoardQueryAllConfig` | 查询所有配置 |
-| `/robot/board/write_config` | `BoardWriteConfig` | 写入配置 |
-| `/robot/board/switch` | `BoardSwitch` | 开关操作（舵机/5V/充电/电池输出） |
+| Topic | Message Type | Description |
+|-------|-------------|-------------|
+| `/robot/board/servo/target` | `ServoCommand` | Servo target position (raw bytes forwarded to servo bus) |
 
-### 验证
+### Services
+
+| Service | Service Type | Description |
+|---------|-------------|-------------|
+| `/robot/board/query_config` | `BoardQueryConfig` | Query single config |
+| `/robot/board/query_all_config` | `BoardQueryAllConfig` | Query all configs |
+| `/robot/board/write_config` | `BoardWriteConfig` | Write config |
+| `/robot/board/switch` | `BoardSwitch` | Switch operation (servo/5V/charge/battery output) |
+| `/robot/board/servo/forward` | `ServoForward` | Forward servo command and wait for response |
+
+### Verification
 
 ```bash
-# 查看话题
+# List topics
 ros2 topic list | grep robot
 
-# 查看服务
+# List services
 ros2 service list | grep robot
 
-# 监听 IMU 数据
+# Echo IMU data
 ros2 topic echo /robot/board/imu
 
-# 查询配置
+# Echo thermal data
+ros2 topic echo /robot/board/thermal
+
+# Query config
 ros2 service call /robot/board/query_all_config servo_robot_board_interface/srv/BoardQueryAllConfig
+
+# Forward servo command (example: 3 bytes)
+ros2 service call /robot/board/servo/forward servo_robot_board_interface/srv/ServoForward "{command: [0x01, 0x02, 0x03]}"
+
+# Publish servo target (example: 3 bytes)
+ros2 topic pub --once /robot/board/servo/target servo_robot_board_interface/msg/ServoCommand "{data: [0x01, 0x02, 0x03]}"
 ```
 
-## 日志
+## Logging
 
-板级日志通过 `DriverCallback::on_log` 转发到两个地方：
-1. **ROS2 日志系统**（`rosout`）- 使用 rclrs 日志宏输出
-2. **`/robot/board/log` 话题** - 使用 `rcl_interfaces/msg/Log` 消息类型，便于过滤和订阅
+Board logs are forwarded to two destinations via `DriverCallback::on_log`:
+1. **ROS2 logging system** (`rosout`) - using rclrs logging macros
+2. **`/robot/board/log` topic** - using `rcl_interfaces/msg/Log` message type for easy filtering and subscription
 
-### 查看日志
+### View Logs
 
 ```bash
-# 方式1：通过 /robot/board/log 话题（推荐）
+# Method 1: Via /robot/board/log topic (recommended)
 ros2 topic echo /robot/board/log
 
-# 方式2：通过 rosout（包含所有节点日志）
+# Method 2: Via rosout (includes all node logs)
 ros2 topic echo /rosout | grep servo_robot_board
 ```
 
-### 日志消息格式
+### Log Message Format
 
-`/robot/board/log` 话题使用 `rcl_interfaces/msg/Log` 消息类型：
+The `/robot/board/log` topic uses `rcl_interfaces/msg/Log` message type:
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `stamp` | `builtin_interfaces/Time` | 时间戳（秒 + 纳秒） |
-| `level` | `uint8` | 日志等级（DEBUG=10, INFO=20, WARN=30, ERROR=40） |
-| `name` | `string` | 节点名称（固定为 `servo_robot_board`） |
-| `msg` | `string` | 格式化的日志消息 `[HH:MM:SS.mmm] file::func: message` |
-| `file` | `string` | 源文件名 |
-| `function` | `string` | 函数名 |
-| `line` | `uint32` | 行号（固定为 0） |
+| Field | Type | Description |
+|-------|------|-------------|
+| `stamp` | `builtin_interfaces/Time` | Timestamp (seconds + nanoseconds) |
+| `level` | `uint8` | Log level (DEBUG=10, INFO=20, WARN=30, ERROR=40) |
+| `name` | `string` | Node name (fixed as `servo_robot_board`) |
+| `msg` | `string` | Formatted log message `[HH:MM:SS.mmm] file::func: message` |
+| `file` | `string` | Source file name |
+| `function` | `string` | Function name |
+| `line` | `uint32` | Line number (fixed as 0) |
 
-### 运行时设置日志等级
+### Set Log Level at Runtime
 
 ```bash
 ros2 run servo-robot-bridge servo_robot_board_bridge --ros-args --log-level debug
 ```
 
-## 数据流
+## Data Flow
 
 ```
-读线程 → DriverState (state.update_*) → 主循环 (state.snapshot) → publish_data()
-                                                    ↓
-分发线程 → EventBus.dispatch()              ROS2 话题发布
-                    ↓                              ↓
-            BridgeCallback::on_log      /robot/board/log (rcl_interfaces/Log)
-                    ↓                              ↓
-            ROS2 日志系统 (rosout)        TUI / 其他订阅者
+Read Thread → DriverState (state.update_*) → Main Loop (state.snapshot) → publish_data()
+                                                        ↓
+Dispatch Thread → EventBus.dispatch()            ROS2 Topic Publishing
+                        ↓                              ↓
+                BridgeCallback::on_log      /robot/board/log (rcl_interfaces/Log)
+                        ↓                              ↓
+                ROS2 Logging System          TUI / Other Subscribers
+
+Servo Target Sub → driver.forward_servo() → STM32 → Servo Bus
+                              ↑
+Service: /robot/board/servo/forward → driver.forward_servo_sync() → Response
 ```
 
-- 主循环每 50ms 轮询 `state.snapshot()` 获取最新数据并发布到 ROS2 话题
-- 服务请求通过 `driver.query_config_sync()` / `driver.write_config_sync()` 同步处理
-- 板级日志同时转发到 ROS2 日志系统和 `/robot/board/log` 话题
+- Main loop polls `state.snapshot()` every 50ms and publishes to ROS2 topics
+- Service requests handled synchronously via `driver.query_config_sync()` / `driver.write_config_sync()`
+- Board logs forwarded to both ROS2 logging system and `/robot/board/log` topic
+- Servo commands forwarded via subscription or service
 
-## 文件说明
+## Servo Command Forwarding
 
-| 文件 | 说明 | 是否提交 |
-|------|------|---------|
-| `Cargo.toml.template` | 依赖模板 | ✅ |
-| `build.rs.template` | 构建脚本模板 | ✅ |
-| `config/servo_robot_bridge.yaml` | 参数配置文件 | ✅ |
-| `launch/bridge.launch.py` | ROS2 launch 文件 | ✅ |
-| `Cargo.toml` | 实际依赖（从模板生成） | ❌ |
-| `build.rs` | 实际构建脚本（从模板生成） | ❌ |
-| `scripts/.env` | 环境变量 | ❌ |
+The bridge supports two methods for sending servo commands:
+
+### Method 1: Topic Subscription (Fire and Forget)
+
+Subscribe to `/robot/board/servo/target` and publish `ServoCommand` messages:
+
+```python
+# Python example
+import rclpy
+from rclpy.node import Node
+from servo_robot_board_interface.msg import ServoCommand
+
+class ServoPublisher(Node):
+    def __init__(self):
+        super().__init__('servo_publisher')
+        self.pub = self.create_publisher(ServoCommand, '/robot/board/servo/target', 10)
+
+    def send_command(self, data: bytes):
+        msg = ServoCommand()
+        msg.data = list(data)
+        self.pub.publish(msg)
+```
+
+### Method 2: Service Call (Request/Response)
+
+Call `/robot/board/servo/forward` service to send command and wait for response:
+
+```python
+# Python example
+import rclpy
+from rclpy.node import Node
+from servo_robot_board_interface.srv import ServoForward
+
+class ServoClient(Node):
+    def __init__(self):
+        super().__init__('servo_client')
+        self.client = self.create_client(ServoForward, '/robot/board/servo/forward')
+
+    async def send_command(self, data: bytes) -> bytes:
+        request = ServoForward.Request()
+        request.command = list(data)
+
+        future = self.client.call_async(request)
+        response = await future
+        return bytes(response.response) if response.success else b''
+```
+
+### Service Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | `bool` | Whether the command was successful |
+| `response` | `uint8[]` | Raw response bytes from servo |
+| `msg` | `string` | Error message (empty if success) |
+
+## File Description
+
+| File | Description | Committed |
+|------|-------------|-----------|
+| `Cargo.toml.template` | Dependency template | ✅ |
+| `build.rs.template` | Build script template | ✅ |
+| `config/servo_robot_bridge.yaml` | Parameter config file | ✅ |
+| `launch/bridge.launch.py` | ROS2 launch file | ✅ |
+| `src/main.rs` | Bridge node entry point | ✅ |
+| `src/services.rs` | Service handlers | ✅ |
+| `src/conversion.rs` | Data type conversion | ✅ |
+| `Cargo.toml` | Actual dependencies (generated from template) | ❌ |
+| `build.rs` | Actual build script (generated from template) | ❌ |
+| `scripts/.env` | Environment variables | ❌ |
+
+
+

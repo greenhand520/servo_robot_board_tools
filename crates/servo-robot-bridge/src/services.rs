@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use servo_robot_board_interface::srv::*;
 use servo_robot_driver::Driver;
 use servo_robot_driver::protocol::config::{Config, ConfigType};
+use servo_robot_driver::protocol::servo::ServoCmdWrapper;
 
 pub fn handle_query_config(
     driver: &Arc<Mutex<Driver>>,
@@ -24,19 +25,19 @@ pub fn handle_query_config(
             match driver.query_config_sync(ct) {
                 Ok(config) => BoardQueryConfig_Response {
                     success: true,
-                    value: config.value(),
+                    value: config.value() as i16,
                     msg: String::new(),
                 },
                 Err(e) => BoardQueryConfig_Response {
                     success: false,
-                    value: 0.0,
+                    value: 0,
                     msg: format!("Query failed: {}", e),
                 },
             }
         }
         None => BoardQueryConfig_Response {
             success: false,
-            value: 0.0,
+            value: 0,
             msg: format!("Invalid config type: 0x{:02X}", req.config_type),
         },
     }
@@ -65,7 +66,7 @@ pub fn handle_write_config(
     let config_type = ConfigType::from_u8(req.config_type);
     match config_type {
         Some(ct) => {
-            let config = Config::from_type_value(ct, req.value);
+            let config = Config::from_type_value(ct, req.value as u16);
             let driver = driver.lock().unwrap();
             match driver.write_config_sync(config) {
                 Ok(success) => BoardWriteConfig_Response {
@@ -118,6 +119,26 @@ pub fn handle_switch(
         Err(e) => BoardSwitch_Response {
             success: false,
             msg: format!("Switch failed: {}", e),
+        },
+    }
+}
+
+pub fn handle_servo_forward(
+    driver: &Arc<Mutex<Driver>>,
+    req: ServoForward_Request,
+) -> ServoForward_Response {
+    let cmd = ServoCmdWrapper::new(req.command);
+    let driver = driver.lock().unwrap();
+    match driver.forward_servo_sync(&cmd) {
+        Ok(response) => ServoForward_Response {
+            success: true,
+            response: response.data().to_vec(),
+            msg: String::new(),
+        },
+        Err(e) => ServoForward_Response {
+            success: false,
+            response: vec![],
+            msg: format!("Servo forward failed: {}", e),
         },
     }
 }

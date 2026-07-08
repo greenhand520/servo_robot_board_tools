@@ -17,6 +17,7 @@ use rclrs::*;
 use servo_robot_board_interface::msg::*;
 use servo_robot_board_interface::srv::*;
 use servo_robot_driver::protocol::log::{LogLevel, LogMessage};
+use servo_robot_driver::protocol::servo::ServoCmdWrapper;
 use servo_robot_driver::{Driver, DriverCallback};
 
 #[cfg(feature = "mock")]
@@ -145,7 +146,6 @@ fn publish_data(
     logger: &Logger,
     imu_pub: &Publisher<sensor_msgs::msg::Imu>,
     power_pub: &Publisher<BoardPower>,
-    thermal_pub: &Publisher<BoardThermal>,
     system_pub: &Publisher<BoardSystem>,
     event_pub: &Publisher<BoardEvent>,
     config_pub: &Publisher<BoardConfig>,
@@ -175,17 +175,6 @@ fn publish_data(
                 logger.throttle(Duration::from_secs(1)),
                 "Battery: {}",
                 battery
-            );
-        }
-    }
-    if let Some(thermal) = &snap.thermal {
-        if let Err(e) = thermal_pub.publish(conversion::convert_thermal(thermal)) {
-            log_error!(logger, "Publish Thermal failed: {}", e);
-        } else {
-            log_debug!(
-                logger.throttle(Duration::from_secs(1)),
-                "Thermal: {}",
-                thermal
             );
         }
     }
@@ -224,9 +213,6 @@ fn run_bridge(
     let imu_pub = node.create_publisher::<sensor_msgs::msg::Imu>("/robot/board/imu")?;
     let power_pub = node
         .create_publisher::<BoardPower>("/robot/board/power")?;
-    let thermal_pub = node.create_publisher::<BoardThermal>(
-        "/robot/board/thermal",
-    )?;
     let system_pub = node
         .create_publisher::<BoardSystem>("/robot/board/system")?;
     let event_pub = node
@@ -325,6 +311,47 @@ fn run_bridge(
         },
     )?;
 
+    let driver_clone = driver.clone();
+    let logger_clone = logger.clone();
+    let _servo_forward_srv = node.create_service::<ServoForward, _>(
+        "/robot/board/servo/forward",
+        move |req: ServoForward_Request| {
+            log_info!(
+                &logger_clone,
+                "Service servo_forward: {} bytes",
+                req.command.len()
+            );
+            let resp = services::handle_servo_forward(&driver_clone, req);
+            if resp.success {
+                log_info!(
+                    &logger_clone,
+                    "Service servo_forward: ok, response {} bytes",
+                    resp.response.len()
+                );
+            } else {
+                log_error!(&logger_clone, "Service servo_forward: failed, {}", resp.msg);
+            }
+            resp
+        },
+    )?;
+
+    let driver_clone = driver.clone();
+    let logger_clone = logger.clone();
+    let _servo_target_sub = node.create_subscription::<ServoTarget, _>(
+        "/robot/board/servo/target",
+        move |msg: ServoTarget| {
+            log_info!(
+                &logger_clone,
+                "Subscription servo_target: {} bytes",
+                msg.data.len()
+            );
+            let cmd = ServoCmdWrapper::new(msg.data.clone());
+            if let Err(e) = driver_clone.lock().unwrap().forward_servo(&cmd) {
+                log_error!(&logger_clone, "Forward servo command failed: {}", e);
+            }
+        },
+    )?;
+
     log_info!(&logger, "Services created, bridge ready!");
 
     // Main loop: Polling state + publishing data + processing service callbacks
@@ -334,7 +361,6 @@ fn run_bridge(
             &logger,
             &imu_pub,
             &power_pub,
-            &thermal_pub,
             &system_pub,
             &event_pub,
             &config_pub,
