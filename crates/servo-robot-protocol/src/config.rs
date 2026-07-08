@@ -20,16 +20,16 @@ pub enum ConfigType {
     Switch5VPower = 0x11,
     SwitchCharge = 0x12,
     SwitchBatExtOut = 0x13,
-    PowerServoCurrentLimit = 0x21,
-    PowerServoTempLimit = 0x22,
-    Power5vTempLimit = 0x23,
-    ChargeMaxCurrent = 0x24,
-    ChargeTempDerating = 0x25,
-    ChargeTempLimit = 0x26,
-    ChargeStopVoltage = 0x27,
-    ChargeStopSoc = 0x28,
+    ChargeStopSoc = 0x20,
     // servo robot board发送的日志等级
-    TxLogLevel = 0x29,
+    TxLogLevel = 0x21,
+    PowerServoCurrentLimitMa = 0x30,
+    PowerServoTempLimit = 0x31,
+    Power5vTempLimit = 0x32,
+    ChargeMaxCurrentMa = 0x33,
+    ChargeTempDerating = 0x34,
+    ChargeTempLimit = 0x35,
+    ChargeStopVoltageMv = 0x36,
 }
 
 impl ConfigType {
@@ -41,15 +41,15 @@ impl ConfigType {
             0x11 => Some(Self::Switch5VPower),
             0x12 => Some(Self::SwitchCharge),
             0x13 => Some(Self::SwitchBatExtOut),
-            0x21 => Some(Self::PowerServoCurrentLimit),
-            0x22 => Some(Self::PowerServoTempLimit),
-            0x23 => Some(Self::Power5vTempLimit),
-            0x24 => Some(Self::ChargeMaxCurrent),
-            0x25 => Some(Self::ChargeTempDerating),
-            0x26 => Some(Self::ChargeTempLimit),
-            0x27 => Some(Self::ChargeStopVoltage),
-            0x28 => Some(Self::ChargeStopSoc),
-            0x29 => Some(Self::TxLogLevel),
+            0x20 => Some(Self::ChargeStopSoc),
+            0x21 => Some(Self::TxLogLevel),
+            0x30 => Some(Self::PowerServoCurrentLimitMa),
+            0x31 => Some(Self::PowerServoTempLimit),
+            0x32 => Some(Self::Power5vTempLimit),
+            0x33 => Some(Self::ChargeMaxCurrentMa),
+            0x34 => Some(Self::ChargeTempDerating),
+            0x35 => Some(Self::ChargeTempLimit),
+            0x36 => Some(Self::ChargeStopVoltageMv),
             _ => None,
         }
     }
@@ -62,26 +62,26 @@ impl ConfigType {
             Self::Switch5VPower => "5V Power",
             Self::SwitchCharge => "Charge",
             Self::SwitchBatExtOut => "Battery Extra Output",
-            Self::PowerServoCurrentLimit => "Servo Current Limit",
-            Self::PowerServoTempLimit => "Servo Temp Limit",
-            Self::Power5vTempLimit => "5V Temp Limit",
-            Self::ChargeMaxCurrent => "Charge Max Current",
-            Self::ChargeTempDerating => "Charge Temp Derating",
-            Self::ChargeTempLimit => "Charge Temp Limit",
-            Self::ChargeStopVoltage => "Charge Stop Voltage",
             Self::ChargeStopSoc => "Charge Stop Soc",
             Self::TxLogLevel => "TxLog Level",
+            Self::PowerServoCurrentLimitMa => "Servo Current Limit(ma)",
+            Self::PowerServoTempLimit => "Servo Temp Limit",
+            Self::Power5vTempLimit => "5V Temp Limit",
+            Self::ChargeMaxCurrentMa => "Charge Max Current(ma)",
+            Self::ChargeTempDerating => "Charge Temp Derating",
+            Self::ChargeTempLimit => "Charge Temp Limit",
+            Self::ChargeStopVoltageMv => "Charge Stop Voltage(mv)",
         }
     }
 
     pub fn unit(&self) -> &'static str {
         match self {
-            Self::PowerServoCurrentLimit | Self::ChargeMaxCurrent => "A",
+            Self::PowerServoCurrentLimitMa | Self::ChargeMaxCurrentMa => "mA",
             Self::PowerServoTempLimit
             | Self::Power5vTempLimit
             | Self::ChargeTempDerating
             | Self::ChargeTempLimit => "°C",
-            Self::ChargeStopVoltage => "V",
+            Self::ChargeStopVoltageMv => "mV",
             Self::ChargeStopSoc => "%",
             _ => "",
         }
@@ -93,24 +93,32 @@ impl ConfigType {
 pub enum Config {
     Reset,
     Shutdown,
+    // Switch the servo power supply
     SwitchPowerServo(bool),
+    // Switch 5v power supply
     SwitchPower5V(bool),
+    // Switch on and off to charge the battery
     SwitchCharge(bool),
+    // Switching on battery extra output
     SwitchBatExtOut(bool),
-    PowerServoCurrentLimit(f32),
-    PowerServoTempLimit(f32),
-    Power5vTempLimit(f32),
-    ChargeMaxCurrent(f32),
-    // 充电开始降流时的充电电路温度
-    ChargeTempDerating(f32),
-    // 停止充电时的充电电路温度
-    ChargeTempLimit(f32),
-    // 充电停止电压
-    ChargeStopVoltage(f32),
-    // 充电电量限制，如只充到80%
-    ChargeStopSoc(f32),
-    // 发送的日志等级
+    // Charging capacity limit, such as charging only up to 80%
+    ChargeStopSoc(u8),
+    // The log level of to send
     TxLogLevel(LogLevel),
+    // Servo power supply current limiting
+    PowerServoCurrentLimitMa(u16),
+    // Servo power supply temperature restriction
+    PowerServoTempLimit(u16),
+    // 5V power temperature limit
+    Power5vTempLimit(u16),
+    // Maximum charging current
+    ChargeMaxCurrentMa(u16),
+    // The temperature of the charging circuit when charging starts to drop current
+    ChargeTempDerating(u16),
+    // The temperature of the charging circuit when charging is stopped
+    ChargeTempLimit(u16),
+    // Charging stop-voltage range
+    ChargeStopVoltageMv(u16),
 }
 
 impl Config {
@@ -122,60 +130,60 @@ impl Config {
             Self::SwitchPower5V(_) => ConfigType::Switch5VPower,
             Self::SwitchCharge(_) => ConfigType::SwitchCharge,
             Self::SwitchBatExtOut(_) => ConfigType::SwitchBatExtOut,
-            Self::PowerServoCurrentLimit(_) => ConfigType::PowerServoCurrentLimit,
-            Self::PowerServoTempLimit(_) => ConfigType::PowerServoTempLimit,
-            Self::Power5vTempLimit(_) => ConfigType::Power5vTempLimit,
-            Self::ChargeMaxCurrent(_) => ConfigType::ChargeMaxCurrent,
-            Self::ChargeTempDerating(_) => ConfigType::ChargeTempDerating,
-            Self::ChargeTempLimit(_) => ConfigType::ChargeTempLimit,
-            Self::ChargeStopVoltage(_) => ConfigType::ChargeStopVoltage,
             Self::ChargeStopSoc(_) => ConfigType::ChargeStopSoc,
             Self::TxLogLevel(_) => ConfigType::TxLogLevel,
+            Self::PowerServoCurrentLimitMa(_) => ConfigType::PowerServoCurrentLimitMa,
+            Self::PowerServoTempLimit(_) => ConfigType::PowerServoTempLimit,
+            Self::Power5vTempLimit(_) => ConfigType::Power5vTempLimit,
+            Self::ChargeMaxCurrentMa(_) => ConfigType::ChargeMaxCurrentMa,
+            Self::ChargeTempDerating(_) => ConfigType::ChargeTempDerating,
+            Self::ChargeTempLimit(_) => ConfigType::ChargeTempLimit,
+            Self::ChargeStopVoltageMv(_) => ConfigType::ChargeStopVoltageMv,
         }
     }
 
-    pub fn value(&self) -> f32 {
+    pub fn value(&self) -> u16 {
         match self {
-            Self::Reset | Self::Shutdown => 0.0,
+            Self::Reset | Self::Shutdown => 0,
             Self::SwitchPowerServo(on)
             | Self::SwitchPower5V(on)
             | Self::SwitchCharge(on)
             | Self::SwitchBatExtOut(on) => {
                 if *on {
-                    1.0
+                    1
                 } else {
-                    0.0
+                    0
                 }
             }
-            Self::PowerServoCurrentLimit(v)
+            Self::ChargeStopSoc(v) => *v as u16,
+            Self::TxLogLevel(level) => *level as u8 as u16,
+            Self::PowerServoCurrentLimitMa(v)
+            | Self::ChargeStopVoltageMv(v)
+            | Self::ChargeMaxCurrentMa(v)
             | Self::PowerServoTempLimit(v)
             | Self::Power5vTempLimit(v)
-            | Self::ChargeMaxCurrent(v)
             | Self::ChargeTempDerating(v)
-            | Self::ChargeTempLimit(v)
-            | Self::ChargeStopVoltage(v)
-            | Self::ChargeStopSoc(v) => *v,
-            Self::TxLogLevel(level) => *level as u8 as f32,
+            | Self::ChargeTempLimit(v) => *v,
         }
     }
 
-    pub fn from_type_value(typ: ConfigType, value: f32) -> Self {
+    pub fn from_type_value(typ: ConfigType, value: u16) -> Self {
         match typ {
             ConfigType::Reset => Self::Reset,
             ConfigType::Shutdown => Self::Shutdown,
-            ConfigType::SwitchServoPower => Self::SwitchPowerServo(value != 0.0),
-            ConfigType::Switch5VPower => Self::SwitchPower5V(value != 0.0),
-            ConfigType::SwitchCharge => Self::SwitchCharge(value != 0.0),
-            ConfigType::SwitchBatExtOut => Self::SwitchBatExtOut(value != 0.0),
-            ConfigType::PowerServoCurrentLimit => Self::PowerServoCurrentLimit(value),
+            ConfigType::SwitchServoPower => Self::SwitchPowerServo(value != 0),
+            ConfigType::Switch5VPower => Self::SwitchPower5V(value != 0),
+            ConfigType::SwitchCharge => Self::SwitchCharge(value != 0),
+            ConfigType::SwitchBatExtOut => Self::SwitchBatExtOut(value != 0),
+            ConfigType::ChargeStopSoc => Self::ChargeStopSoc(value as _),
+            ConfigType::TxLogLevel => Self::TxLogLevel(LogLevel::from_u8(value as _)),
+            ConfigType::PowerServoCurrentLimitMa => Self::PowerServoCurrentLimitMa(value),
             ConfigType::PowerServoTempLimit => Self::PowerServoTempLimit(value),
             ConfigType::Power5vTempLimit => Self::Power5vTempLimit(value),
-            ConfigType::ChargeMaxCurrent => Self::ChargeMaxCurrent(value),
+            ConfigType::ChargeMaxCurrentMa => Self::ChargeMaxCurrentMa(value),
             ConfigType::ChargeTempDerating => Self::ChargeTempDerating(value),
             ConfigType::ChargeTempLimit => Self::ChargeTempLimit(value),
-            ConfigType::ChargeStopVoltage => Self::ChargeStopVoltage(value),
-            ConfigType::ChargeStopSoc => Self::ChargeStopSoc(value),
-            ConfigType::TxLogLevel => Self::TxLogLevel(LogLevel::from_u8(value as _)),
+            ConfigType::ChargeStopVoltageMv => Self::ChargeStopVoltageMv(value),
         }
     }
 
@@ -188,16 +196,32 @@ impl Config {
         }
         let config_type =
             ConfigType::from_u8(data[0]).ok_or(FrameError::PayloadDecode("Unknown config type"))?;
-        if (config_type as u8) < 0x20 {
-            return Ok(Config::from_type_value(config_type, 0.0));
+
+        // Reset and Shutdown have no value payload
+        match config_type {
+            ConfigType::Reset => return Ok(Config::Reset),
+            ConfigType::Shutdown => return Ok(Config::Shutdown),
+            _ => {}
         }
-        if data.len() < 5 {
+
+        if (config_type as u8) < 0x30 {
+            // For type value less than 0x30, only need one byte to get the configuration value
+            if data.len() < 2 {
+                return Err(FrameError::PayloadTooShort {
+                    expected: 2,
+                    got: data.len(),
+                });
+            }
+            let value = u16::from_le_bytes([data[1], 0]);
+            return Ok(Config::from_type_value(config_type, value));
+        }
+        if data.len() < 3 {
             return Err(FrameError::PayloadTooShort {
-                expected: 5,
+                expected: 3,
                 got: data.len(),
             });
         }
-        let value = f32::from_le_bytes([data[1], data[2], data[3], data[4]]);
+        let value = u16::from_le_bytes([data[1], data[2]]);
         Ok(Config::from_type_value(config_type, value))
     }
 
@@ -230,14 +254,15 @@ impl FromPayload for Config {
 /// Snapshot of board-level configuration
 #[derive(Debug, Clone)]
 pub struct BoardConfigSnapshot {
-    pub servo_current_limit: f32,
-    pub servo_temp_limit: f32,
-    pub temp_5v_limit: f32,
-    pub charge_max_current: f32,
-    pub charge_temp_derating: f32,
-    pub charge_temp_limit: f32,
-    pub charge_stop_voltage: f32,
-    pub charge_stop_percentage: f32,
+    pub servo_current_limit_ma: u16,
+    pub servo_temp_limit: u16,
+    pub temp_5v_limit: u16,
+    pub charge_max_current_ma: u16,
+    pub charge_temp_derating: u16,
+    pub charge_temp_limit: u16,
+    pub charge_stop_voltage_mv: u16,
+    // 1~100
+    pub charge_stop_percentage: u8,
     pub charge_enable: bool,
     pub power_servo_on: bool,
     pub power_5v_on: bool,
@@ -249,14 +274,14 @@ pub struct BoardConfigSnapshot {
 impl Default for BoardConfigSnapshot {
     fn default() -> Self {
         BoardConfigSnapshot {
-            servo_current_limit: 5.0,
-            servo_temp_limit: 80.0,
-            temp_5v_limit: 70.0,
-            charge_max_current: 9.0,
-            charge_temp_derating: 60.0,
-            charge_temp_limit: 70.0,
-            charge_stop_voltage: 16.8,
-            charge_stop_percentage: 1.0,
+            servo_current_limit_ma: 50,
+            servo_temp_limit: 800,
+            temp_5v_limit: 700,
+            charge_max_current_ma: 90,
+            charge_temp_derating: 600,
+            charge_temp_limit: 700,
+            charge_stop_voltage_mv: 168,
+            charge_stop_percentage: 100,
             charge_enable: true,
             power_servo_on: true,
             power_5v_on: true,
@@ -269,35 +294,29 @@ impl Default for BoardConfigSnapshot {
 
 impl BoardConfigSnapshot {
     pub fn from_bytes(data: &[u8]) -> Result<Self, FrameError> {
-        if data.len() < 38 {
+        if data.len() < 21 {
             return Err(FrameError::PayloadTooShort {
-                expected: 38,
+                expected: 21,
                 got: data.len(),
             });
         }
         let mut o = 0;
-        let servo_current_limit =
-            f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
-        o += 4;
-        let servo_temp_limit = f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
-        o += 4;
-        let temp_5v_limit = f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
-        o += 4;
-        let charge_max_current =
-            f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
-        o += 4;
-        let charge_temp_derating =
-            f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
-        o += 4;
-        let charge_temp_limit =
-            f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
-        o += 4;
-        let charge_stop_voltage =
-            f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
-        o += 4;
-        let charge_stop_percentage =
-            f32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
-        o += 4;
+        let servo_current_limit_ma = u16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let servo_temp_limit = u16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let temp_5v_limit = u16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let charge_max_current_ma = u16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let charge_temp_derating = u16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let charge_temp_limit = u16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let charge_stop_voltage_mv = u16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let charge_stop_percentage = data[o];
+        o += 1;
         let charge_enable = data[o] != 0;
         o += 1;
         let power_servo_on = data[o] != 0;
@@ -310,13 +329,13 @@ impl BoardConfigSnapshot {
         o += 1;
         let tx_log_level = LogLevel::from_u8(data[o]);
         Ok(BoardConfigSnapshot {
-            servo_current_limit,
+            servo_current_limit_ma,
             servo_temp_limit,
             temp_5v_limit,
-            charge_max_current,
+            charge_max_current_ma,
             charge_temp_derating,
             charge_temp_limit,
-            charge_stop_voltage,
+            charge_stop_voltage_mv,
             charge_stop_percentage,
             charge_enable,
             power_servo_on,
@@ -328,14 +347,14 @@ impl BoardConfigSnapshot {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(38);
-        buf.extend_from_slice(&self.servo_current_limit.to_le_bytes());
+        let mut buf = Vec::with_capacity(22);
+        buf.extend_from_slice(&self.servo_current_limit_ma.to_le_bytes());
         buf.extend_from_slice(&self.servo_temp_limit.to_le_bytes());
         buf.extend_from_slice(&self.temp_5v_limit.to_le_bytes());
-        buf.extend_from_slice(&self.charge_max_current.to_le_bytes());
+        buf.extend_from_slice(&self.charge_max_current_ma.to_le_bytes());
         buf.extend_from_slice(&self.charge_temp_derating.to_le_bytes());
         buf.extend_from_slice(&self.charge_temp_limit.to_le_bytes());
-        buf.extend_from_slice(&self.charge_stop_voltage.to_le_bytes());
+        buf.extend_from_slice(&self.charge_stop_voltage_mv.to_le_bytes());
         buf.extend_from_slice(&self.charge_stop_percentage.to_le_bytes());
         buf.push(self.charge_enable as u8);
         buf.push(self.power_servo_on as u8);
@@ -360,17 +379,18 @@ impl FromPayload for BoardConfigSnapshot {
 
 impl core::fmt::Display for BoardConfigSnapshot {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // Convert u16 (*10) to f32 for display
         write!(
             f,
-            "servo={:.1}A/{:.1}°C 5v={:.1}°C chg={:.1}A/{:.1}-{:.1}°C/{:.1}V/{:.0}% sw=[{},{},{},{},{}] lvl={}",
-            self.servo_current_limit,
-            self.servo_temp_limit,
-            self.temp_5v_limit,
-            self.charge_max_current,
-            self.charge_temp_derating,
-            self.charge_temp_limit,
-            self.charge_stop_voltage,
-            self.charge_stop_percentage * 100.0,
+            "servo={:.1}mA/{:.1}°C 5v={:.1}°C chg={:.1}A/{:.1}-{:.1}°C/{:.1}mV/{}% sw=[{},{},{},{},{}] lvl={}",
+            self.servo_current_limit_ma,
+            self.servo_temp_limit as f32 / 10.0,
+            self.temp_5v_limit as f32 / 10.0,
+            self.charge_max_current_ma,
+            self.charge_temp_derating as f32 / 10.0,
+            self.charge_temp_limit as f32 / 10.0,
+            self.charge_stop_voltage_mv,
+            self.charge_stop_percentage,
             if self.power_servo_on { "S" } else { "-" },
             if self.power_5v_on { "5" } else { "-" },
             if self.charge_on { "C" } else { "-" },

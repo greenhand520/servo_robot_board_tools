@@ -16,7 +16,7 @@ pub mod imu;
 pub mod log;
 pub mod power;
 pub mod system;
-pub mod thermal;
+pub mod servo;
 
 /// 通用枚举转换宏
 #[macro_export]

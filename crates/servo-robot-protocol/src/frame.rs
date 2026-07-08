@@ -15,8 +15,8 @@ use crate::event::BoardEvent;
 use crate::imu::ImuData;
 use crate::log::LogMessage;
 use crate::power::PowerData;
+use crate::servo::ServoCmdWrapper;
 use crate::system::SystemInfo;
-use crate::thermal::ThermalData;
 /// 帧头
 pub const FRAME_HEAD: u8 = 0xAA;
 
@@ -32,22 +32,25 @@ pub enum FrameType {
     // ═══ 上行 (STM32 → PC) ═══
     Imu = 0x01,
     Power = 0x02,
-    Thermal = 0x03,
-    Config = 0x04,
-    Battery = 0x05,
-    System = 0x06,
-    Event = 0x07,
-    Log = 0x08,
+    Config = 0x03,
+    Battery = 0x04,
+    System = 0x05,
+    Event = 0x06,
+    Log = 0x07,
 
     // ═══ 下行 (PC → STM32) ═══
     CfgWrite = 0x80,
     CfgQuery = 0x81,
     CfgQueryAll = 0x82,
+    // Commands for forwarding servo operations, including read and write
+    ServoForward = 0x83,
 
     // ═══ 应答 (STM32 → PC) ═══
     AckCfgWrite = 0xC0,
     AckCfgQuery = 0xC1,
     AckCfgQueryAll = 0xC2,
+    // Respond to the servo's command
+    AckServoCmd = 0xC3,
 
     // ═══ 未知类型 ═══
     Unknown(u8),
@@ -58,7 +61,7 @@ impl FrameType {
         match v {
             0x01 => Self::Imu,
             0x02 => Self::Power,
-            0x03 => Self::Thermal,
+            // 0x03 保留（原 Thermal，已合并到 System）
             0x04 => Self::Config,
             0x05 => Self::Battery,
             0x06 => Self::System,
@@ -67,9 +70,11 @@ impl FrameType {
             0x80 => Self::CfgWrite,
             0x81 => Self::CfgQuery,
             0x82 => Self::CfgQueryAll,
+            0x83 => Self::ServoForward,
             0xC0 => Self::AckCfgWrite,
             0xC1 => Self::AckCfgQuery,
             0xC2 => Self::AckCfgQueryAll,
+            0xC3 => Self::AckServoCmd,
             _ => Self::Unknown(v),
         }
     }
@@ -78,7 +83,6 @@ impl FrameType {
         match self {
             Self::Imu => 0x01,
             Self::Power => 0x02,
-            Self::Thermal => 0x03,
             Self::Config => 0x04,
             Self::Battery => 0x05,
             Self::System => 0x06,
@@ -87,9 +91,11 @@ impl FrameType {
             Self::CfgWrite => 0x80,
             Self::CfgQuery => 0x81,
             Self::CfgQueryAll => 0x82,
+            Self::ServoForward => 0x83,
             Self::AckCfgWrite => 0xC0,
             Self::AckCfgQuery => 0xC1,
             Self::AckCfgQueryAll => 0xC2,
+            Self::AckServoCmd => 0xC3,
             Self::Unknown(v) => *v,
         }
     }
@@ -99,7 +105,6 @@ impl FrameType {
             self,
             Self::Imu
                 | Self::Power
-                | Self::Thermal
                 | Self::Config
                 | Self::Battery
                 | Self::System
@@ -109,13 +114,16 @@ impl FrameType {
     }
 
     pub fn is_downlink(&self) -> bool {
-        matches!(self, Self::CfgWrite | Self::CfgQuery | Self::CfgQueryAll)
+        matches!(
+            self,
+            Self::CfgWrite | Self::CfgQuery | Self::CfgQueryAll | Self::ServoForward
+        )
     }
 
     pub fn is_response(&self) -> bool {
         matches!(
             self,
-            Self::AckCfgWrite | Self::AckCfgQuery | Self::AckCfgQueryAll
+            Self::AckCfgWrite | Self::AckCfgQuery | Self::AckCfgQueryAll | Self::AckServoCmd
         )
     }
 
@@ -123,7 +131,6 @@ impl FrameType {
         match self {
             Self::Imu => "IMU",
             Self::Power => "Power",
-            Self::Thermal => "Thermal",
             Self::Config => "Config",
             Self::Battery => "Battery",
             Self::System => "System",
@@ -132,9 +139,11 @@ impl FrameType {
             Self::CfgWrite => "CfgWrite",
             Self::CfgQuery => "CfgQuery",
             Self::CfgQueryAll => "CfgQueryAll",
+            Self::ServoForward => "ServoForward",
             Self::AckCfgWrite => "AckCfgWrite",
             Self::AckCfgQuery => "AckCfgQuery",
             Self::AckCfgQueryAll => "AckCfgQueryAll",
+            Self::AckServoCmd => "AckServoCmd",
             Self::Unknown(_) => "Unknown",
         }
     }
@@ -273,7 +282,6 @@ pub enum TypedFrame {
     // 上行帧
     Imu(ImuData),
     Power(PowerData),
-    Thermal(ThermalData),
     Config(BoardConfigSnapshot),
     Battery(BatteryState),
     System(SystemInfo),
@@ -284,11 +292,13 @@ pub enum TypedFrame {
     AckCfgWrite { success: bool },
     AckCfgQuery(Config),
     AckCfgQueryAll(BoardConfigSnapshot),
+    AckServoCmd(ServoCmdWrapper),
 
     // 下行帧（用于发送）
     ConfigWrite(Config),
     ConfigQuery(ConfigType),
     ConfigQueryAll,
+    ServoForward(ServoCmdWrapper),
 }
 
 impl TypedFrame {
@@ -296,9 +306,6 @@ impl TypedFrame {
         match frame.frame_type {
             FrameType::Imu => Ok(TypedFrame::Imu(ImuData::from_bytes(&frame.payload)?)),
             FrameType::Power => Ok(TypedFrame::Power(PowerData::from_bytes(&frame.payload)?)),
-            FrameType::Thermal => Ok(TypedFrame::Thermal(ThermalData::from_bytes(
-                &frame.payload,
-            )?)),
             FrameType::Config => Ok(TypedFrame::Config(BoardConfigSnapshot::from_bytes(
                 &frame.payload,
             )?)),
@@ -325,8 +332,17 @@ impl TypedFrame {
             FrameType::AckCfgQueryAll => Ok(TypedFrame::AckCfgQueryAll(
                 BoardConfigSnapshot::from_bytes(&frame.payload)?,
             )),
+            FrameType::ServoForward => Ok(TypedFrame::ServoForward(ServoCmdWrapper::from_payload(
+                &frame.payload,
+            )?)),
+            FrameType::AckServoCmd => Ok(TypedFrame::AckServoCmd(ServoCmdWrapper::from_payload(
+                &frame.payload,
+            )?)),
+            // 下行帧类型不应在接收端解析
+            FrameType::CfgWrite | FrameType::CfgQuery | FrameType::CfgQueryAll => {
+                Err(FrameError::PayloadDecode("Downlink frame not expected"))
+            }
             FrameType::Unknown(_v) => Err(FrameError::PayloadDecode("Unknown frame type")),
-            _ => Err(FrameError::PayloadDecode("Unexpected frame type")),
         }
     }
 
@@ -334,7 +350,6 @@ impl TypedFrame {
         match self {
             TypedFrame::Imu(_) => FrameType::Imu,
             TypedFrame::Power(_) => FrameType::Power,
-            TypedFrame::Thermal(_) => FrameType::Thermal,
             TypedFrame::Config(_) => FrameType::Config,
             TypedFrame::Battery(_) => FrameType::Battery,
             TypedFrame::System(_) => FrameType::System,
@@ -343,9 +358,11 @@ impl TypedFrame {
             TypedFrame::AckCfgWrite { .. } => FrameType::AckCfgWrite,
             TypedFrame::AckCfgQuery(_) => FrameType::AckCfgQuery,
             TypedFrame::AckCfgQueryAll(_) => FrameType::AckCfgQueryAll,
+            TypedFrame::AckServoCmd(_) => FrameType::AckServoCmd,
             TypedFrame::ConfigWrite(_) => FrameType::CfgWrite,
             TypedFrame::ConfigQuery(_) => FrameType::CfgQuery,
             TypedFrame::ConfigQueryAll => FrameType::CfgQueryAll,
+            TypedFrame::ServoForward(_) => FrameType::ServoForward,
         }
     }
 }

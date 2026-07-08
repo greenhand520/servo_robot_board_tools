@@ -28,34 +28,45 @@ impl core::fmt::Display for Version {
     }
 }
 
-/// 系统信息
+/// 系统信息（包含温度数据）
 #[derive(Debug, Clone)]
 pub struct SystemInfo {
-    // stm32设备id
+    // STM32 device ID
     pub device_id: u16,
-    // stm32全球唯一id
+    // STM32 global ID
     pub uid: u32,
-    // imu的id
+    // IMU's ID
     pub imu_id: u8,
-    // 运行时间
+    // Running time
     pub uptime_s: u32,
-    // cpu使用率
+    // CPU Usage
     pub cpu_usage_percent: u8,
     pub free_heap_kb: u16,
-    // 系统启动以来栈剩余可用空间的最小值
+    // The minimum available stack space since system startup
     pub stack_watermark_min_kb: u16,
     pub i2c_error_count: u16,
     pub spi_error_count: u16,
     pub uart_error_count: u16,
     pub usb_error_count: u16,
-    // 总共发送的帧
+    // A total of frames sent
     pub frames_sent_total: u32,
-    // pd握手协议电压
-    pub pd_request_voltage: u16,
-    // pd握手协议电流
-    pub pd_request_current: u16,
-    /// 固件版本
+    // PD handshake protocol voltage(mV)
+    pub pd_request_voltage_mv: u16,
+    // PD handshake protocol current(mA)
+    pub pd_request_current_ma: u16,
     pub firmware_version: Version,
+
+    // ═══ 温度数据 (i16, 实际值 = 原始值 / 10) ═══
+    // Servo power supply temperature
+    pub temp_servo_power: i16,
+    // 5V power supply temperature
+    pub temp_5v_power: i16,
+    // MCU Temperature
+    pub temp_mcu: i16,
+    // Charging circuit temperature
+    pub temp_charge: i16,
+    // Battery overall temperature
+    pub temp_battery: i16,
 }
 
 impl Default for SystemInfo {
@@ -73,18 +84,24 @@ impl Default for SystemInfo {
             uart_error_count: 0,
             usb_error_count: 0,
             frames_sent_total: 0,
-            pd_request_voltage: 0,
-            pd_request_current: 0,
+            pd_request_voltage_mv: 0,
+            pd_request_current_ma: 0,
             firmware_version: Version::new(0, 1, 0),
+            temp_servo_power: 0,
+            temp_5v_power: 0,
+            temp_mcu: 0,
+            temp_charge: 0,
+            temp_battery: 0,
         }
     }
 }
 
 impl SystemInfo {
     pub fn from_bytes(data: &[u8]) -> Result<Self, FrameError> {
-        if data.len() < 31 {
+        // 31 bytes base + 10 bytes thermal = 41 bytes
+        if data.len() < 41 {
             return Err(FrameError::PayloadTooShort {
-                expected: 31,
+                expected: 41,
                 got: data.len(),
             });
         }
@@ -114,11 +131,25 @@ impl SystemInfo {
         let frames_sent_total =
             u32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]);
         o += 4;
-        let pd_request_voltage = u16::from_le_bytes([data[o], data[o + 1]]);
+        let pd_request_voltage_mv = u16::from_le_bytes([data[o], data[o + 1]]);
         o += 2;
-        let pd_request_current = u16::from_le_bytes([data[o], data[o + 1]]);
+        let pd_request_current_ma = u16::from_le_bytes([data[o], data[o + 1]]);
         o += 2;
         let version = Version::new(data[o], data[o + 1], data[o + 2]);
+        o += 3;
+
+        // Temperature data，the transmitted data is an integer.
+        // For example, the servo power temperature transmits 571, but in reality, it is 571/10 = 57.1
+        let temp_servo_power = i16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let temp_5v_power = i16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let temp_mcu = i16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let temp_charge = i16::from_le_bytes([data[o], data[o + 1]]);
+        o += 2;
+        let temp_battery = i16::from_le_bytes([data[o], data[o + 1]]);
+
         Ok(SystemInfo {
             device_id,
             uid,
@@ -132,14 +163,19 @@ impl SystemInfo {
             uart_error_count,
             usb_error_count,
             frames_sent_total,
-            pd_request_voltage,
-            pd_request_current,
+            pd_request_voltage_mv,
+            pd_request_current_ma,
             firmware_version: version,
+            temp_servo_power,
+            temp_5v_power,
+            temp_mcu,
+            temp_charge,
+            temp_battery,
         })
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(31);
+        let mut buf = Vec::with_capacity(41);
         buf.extend_from_slice(&self.device_id.to_le_bytes());
         buf.extend_from_slice(&self.uid.to_le_bytes());
         buf.push(self.imu_id);
@@ -152,11 +188,18 @@ impl SystemInfo {
         buf.extend_from_slice(&self.uart_error_count.to_le_bytes());
         buf.extend_from_slice(&self.usb_error_count.to_le_bytes());
         buf.extend_from_slice(&self.frames_sent_total.to_le_bytes());
-        buf.extend_from_slice(&self.pd_request_voltage.to_le_bytes());
-        buf.extend_from_slice(&self.pd_request_current.to_le_bytes());
+        buf.extend_from_slice(&self.pd_request_voltage_mv.to_le_bytes());
+        buf.extend_from_slice(&self.pd_request_current_ma.to_le_bytes());
         buf.push(self.firmware_version.major);
         buf.push(self.firmware_version.minor);
         buf.push(self.firmware_version.patch);
+
+        // Thermal data
+        buf.extend_from_slice(&self.temp_servo_power.to_le_bytes());
+        buf.extend_from_slice(&self.temp_5v_power.to_le_bytes());
+        buf.extend_from_slice(&self.temp_mcu.to_le_bytes());
+        buf.extend_from_slice(&self.temp_charge.to_le_bytes());
+        buf.extend_from_slice(&self.temp_battery.to_le_bytes());
         buf
     }
 }
@@ -176,19 +219,17 @@ impl core::fmt::Display for SystemInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
-            "V{} up={}s CPU={}% heap={}KB stack={}KB frames={} errs(i={},s={},u={},usb={}) PD={}V/{}A",
+            "V{} up={}s CPU={}% heap={}KB frames={} T:mcu={:.1} sv={:.1} 5v={:.1} chg={:.1} bat={:.1}°C",
             self.firmware_version,
             self.uptime_s,
             self.cpu_usage_percent,
             self.free_heap_kb,
-            self.stack_watermark_min_kb,
             self.frames_sent_total,
-            self.i2c_error_count,
-            self.spi_error_count,
-            self.uart_error_count,
-            self.usb_error_count,
-            self.pd_request_voltage / 1000,
-            self.pd_request_current / 1000,
+            self.temp_mcu as f32 / 10.0,
+            self.temp_servo_power as f32 / 10.0,
+            self.temp_5v_power as f32 / 10.0,
+            self.temp_charge as f32 / 10.0,
+            self.temp_battery as f32 / 10.0,
         )
     }
 }

@@ -163,7 +163,7 @@ pub struct EventLog {
 /// 事件类型
 #[derive(Debug, Clone)]
 pub enum EventKind {
-    // 充电事件
+    // Charging event
     NotCharging = 0,
     PreCharge,
     CcCharge,
@@ -171,14 +171,14 @@ pub enum EventKind {
     FullCharge,
     PdSinkFault,
     UnsupportedCharger,
-    // 保护事件
+    // Protect the event
     ServoOvercurrent,
     PowerServoThermal,
     Power5vThermal,
     ChargeDerating,
     ChargeThermal,
     BatteryLow,
-    // 错误事件
+    // Error event
     UnknownError,
     Uart1Error,
     Uart2Error,
@@ -187,7 +187,7 @@ pub enum EventKind {
     Spi1Error,
     UsbError,
     DmaError,
-    // 状态变化
+    // Status changes event
     ChargerConnected,
     ChargerDisconnected,
     FanOn,
